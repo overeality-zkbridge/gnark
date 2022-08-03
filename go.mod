@@ -11,6 +11,8 @@ require (
 	github.com/stretchr/testify v1.7.1
 )
 
+replace github.com/fxamacker/cbor/v2 v2.2.0 => github.com/overeality-zkbridge/cbor/v2 v2.0.0-20220803080343-7ade758b32b2
+
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/kr/pretty v0.3.0 // indirect
