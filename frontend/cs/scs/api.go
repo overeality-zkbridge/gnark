@@ -192,7 +192,8 @@ func (system *scs) FromBinary(b ...frontend.Variable) frontend.Variable {
 
 // Xor returns a ^ b
 // a and b must be 0 or 1
-func (system *scs) Xor(a, b frontend.Variable) frontend.Variable {
+func (system *scs) Xor(a, b frontend.Variable, _ ...frontend.ApiOption) frontend.Variable {
+
 	_a, aConstant := system.ConstantValue(a)
 	_b, bConstant := system.ConstantValue(b)
 
@@ -223,7 +224,12 @@ func (system *scs) Xor(a, b frontend.Variable) frontend.Variable {
 
 // Or returns a | b
 // a and b must be 0 or 1
-func (system *scs) Or(a, b frontend.Variable) frontend.Variable {
+func (system *scs) Or(a, b frontend.Variable, opts ...frontend.ApiOption) frontend.Variable {
+	opt := frontend.ApiConfig{}
+	for _, o := range opts {
+		o(&opt)
+	}
+
 	_a, aConstant := system.ConstantValue(a)
 	_b, bConstant := system.ConstantValue(b)
 
@@ -244,7 +250,9 @@ func (system *scs) Or(a, b frontend.Variable) frontend.Variable {
 		if !(_b.IsUint64() && (_b.Uint64() <= 1)) {
 			panic(fmt.Sprintf("%s should be 0 or 1", _b.String()))
 		}
-		system.AssertIsBoolean(a)
+		if !opt.UnconstrainedInputs {
+			system.AssertIsBoolean(a)
+		}
 
 		one := big.NewInt(1)
 		_b.Sub(_b, one)
@@ -254,17 +262,27 @@ func (system *scs) Or(a, b frontend.Variable) frontend.Variable {
 	}
 	l := a.(compiled.Term)
 	r := b.(compiled.Term)
-	system.AssertIsBoolean(l)
-	system.AssertIsBoolean(r)
+
+	if !opt.UnconstrainedInputs {
+		system.AssertIsBoolean(l)
+		system.AssertIsBoolean(r)
+	}
+
 	system.addPlonkConstraint(l, r, res, compiled.CoeffIdMinusOne, compiled.CoeffIdMinusOne, compiled.CoeffIdOne, compiled.CoeffIdOne, compiled.CoeffIdOne, compiled.CoeffIdZero)
 	return res
 }
 
 // Or returns a & b
 // a and b must be 0 or 1
-func (system *scs) And(a, b frontend.Variable) frontend.Variable {
-	system.AssertIsBoolean(a)
-	system.AssertIsBoolean(b)
+func (system *scs) And(a, b frontend.Variable, opts ...frontend.ApiOption) frontend.Variable {
+	opt := frontend.ApiConfig{}
+	for _, o := range opts {
+		o(&opt)
+	}
+	if !opt.UnconstrainedInputs {
+		system.AssertIsBoolean(a)
+		system.AssertIsBoolean(b)
+	}
 	return system.Mul(a, b)
 }
 

@@ -271,15 +271,21 @@ func (system *r1cs) FromBinary(_b ...frontend.Variable) frontend.Variable {
 }
 
 // Xor compute the XOR between two frontend.Variables
-func (system *r1cs) Xor(_a, _b frontend.Variable) frontend.Variable {
+func (system *r1cs) Xor(_a, _b frontend.Variable, opts ...frontend.ApiOption) frontend.Variable {
 
 	vars, _ := system.toVariables(_a, _b)
 
 	a := vars[0]
 	b := vars[1]
 
-	system.AssertIsBoolean(a)
-	system.AssertIsBoolean(b)
+	opt := frontend.ApiConfig{}
+	for _, o := range opts {
+		o(&opt)
+	}
+	if !opt.UnconstrainedInputs {
+		system.AssertIsBoolean(a)
+		system.AssertIsBoolean(b)
+	}
 
 	// the formulation used is for easing up the conversion to sparse r1cs
 	res := system.newInternalVariable()
@@ -294,14 +300,20 @@ func (system *r1cs) Xor(_a, _b frontend.Variable) frontend.Variable {
 }
 
 // Or compute the OR between two frontend.Variables
-func (system *r1cs) Or(_a, _b frontend.Variable) frontend.Variable {
+func (system *r1cs) Or(_a, _b frontend.Variable, opts ...frontend.ApiOption) frontend.Variable {
 	vars, _ := system.toVariables(_a, _b)
 
 	a := vars[0]
 	b := vars[1]
 
-	system.AssertIsBoolean(a)
-	system.AssertIsBoolean(b)
+	opt := frontend.ApiConfig{}
+	for _, o := range opts {
+		o(&opt)
+	}
+	if !opt.UnconstrainedInputs {
+		system.AssertIsBoolean(a)
+		system.AssertIsBoolean(b)
+	}
 
 	// the formulation used is for easing up the conversion to sparse r1cs
 	res := system.newInternalVariable()
@@ -315,14 +327,20 @@ func (system *r1cs) Or(_a, _b frontend.Variable) frontend.Variable {
 }
 
 // And compute the AND between two frontend.Variables
-func (system *r1cs) And(_a, _b frontend.Variable) frontend.Variable {
+func (system *r1cs) And(_a, _b frontend.Variable, opts ...frontend.ApiOption) frontend.Variable {
 	vars, _ := system.toVariables(_a, _b)
 
 	a := vars[0]
 	b := vars[1]
 
-	system.AssertIsBoolean(a)
-	system.AssertIsBoolean(b)
+	opt := frontend.ApiConfig{}
+	for _, o := range opts {
+		o(&opt)
+	}
+	if !opt.UnconstrainedInputs {
+		system.AssertIsBoolean(a)
+		system.AssertIsBoolean(b)
+	}
 
 	res := system.Mul(a, b)
 

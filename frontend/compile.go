@@ -151,6 +151,20 @@ func IgnoreUnconstrainedInputs() CompileOption {
 	}
 }
 
+type ApiConfig struct {
+	UnconstrainedInputs bool
+}
+
+// ApiOption configures the behaviour of api operation.
+type ApiOption func(opt *ApiConfig) error
+
+func WithUnconstrainedInputs() ApiOption {
+	return func(opt *ApiConfig) error {
+		opt.UnconstrainedInputs = true
+		return nil
+	}
+}
+
 var tVariable reflect.Type
 
 func init() {

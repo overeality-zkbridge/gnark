@@ -209,7 +209,7 @@ func (e *engine) FromBinary(v ...frontend.Variable) frontend.Variable {
 	return r
 }
 
-func (e *engine) Xor(i1, i2 frontend.Variable) frontend.Variable {
+func (e *engine) Xor(i1, i2 frontend.Variable, _ ...frontend.ApiOption) frontend.Variable {
 	b1, b2 := e.toBigInt(i1), e.toBigInt(i2)
 	e.mustBeBoolean(&b1)
 	e.mustBeBoolean(&b2)
@@ -217,7 +217,7 @@ func (e *engine) Xor(i1, i2 frontend.Variable) frontend.Variable {
 	return b1
 }
 
-func (e *engine) Or(i1, i2 frontend.Variable) frontend.Variable {
+func (e *engine) Or(i1, i2 frontend.Variable, _ ...frontend.ApiOption) frontend.Variable {
 	b1, b2 := e.toBigInt(i1), e.toBigInt(i2)
 	e.mustBeBoolean(&b1)
 	e.mustBeBoolean(&b2)
@@ -225,7 +225,7 @@ func (e *engine) Or(i1, i2 frontend.Variable) frontend.Variable {
 	return b1
 }
 
-func (e *engine) And(i1, i2 frontend.Variable) frontend.Variable {
+func (e *engine) And(i1, i2 frontend.Variable, _ ...frontend.ApiOption) frontend.Variable {
 	b1, b2 := e.toBigInt(i1), e.toBigInt(i2)
 	e.mustBeBoolean(&b1)
 	e.mustBeBoolean(&b2)

@@ -66,15 +66,15 @@ type API interface {
 
 	// Xor returns a ^ b
 	// a and b must be 0 or 1
-	Xor(a, b Variable) Variable
+	Xor(a, b Variable, opts ...ApiOption) Variable
 
 	// Or returns a | b
 	// a and b must be 0 or 1
-	Or(a, b Variable) Variable
+	Or(a, b Variable, opts ...ApiOption) Variable
 
 	// Or returns a & b
 	// a and b must be 0 or 1
-	And(a, b Variable) Variable
+	And(a, b Variable, opts ...ApiOption) Variable
 
 	// ---------------------------------------------------------------------------------------------
 	// Conditionals
