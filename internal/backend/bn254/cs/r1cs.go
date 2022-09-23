@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -29,8 +30,8 @@ import (
 	"github.com/fxamacker/cbor/v2"
 
 	"encoding/binary"
-	"unsafe"
 	"io/ioutil"
+	"unsafe"
 
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/hint"
@@ -479,6 +480,12 @@ func int_to_byte(x int) []byte {
 	return b[:]
 }
 
+func uint64_to_byte(x uint64) []byte {
+	var b [8]byte
+	binary.LittleEndian.PutUint64(b[:], x)
+	return b[:]
+}
+
 func uint32_to_byte(x uint32) []byte {
 	var buf [4]byte
 	binary.LittleEndian.PutUint32(buf[:], x)
@@ -507,9 +514,13 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 
 	for k, v := range mhints {
 		mhintsBinary = append(mhintsBinary, int_to_byte(k)...)
-		if _, ok := mhintscheck[v]; ok {
+		if lastKey, ok := mhintscheck[v]; ok {
 			//do something here
-			panic("duplicate hint")
+			mhintsBinary = append(mhintsBinary, int_to_byte(0)...)
+			mhintsBinary = append(mhintsBinary, int_to_byte(lastKey)...)
+			continue
+		} else {
+			mhintsBinary = append(mhintsBinary, int_to_byte(1)...)
 		}
 		mhintscheck[v] = k
 		//Serialize a hint
@@ -531,8 +542,16 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 				hintBinary = append(hintBinary, int_to_byte(int(25447))...)
 				hintBinary = append(hintBinary, int_to_byte(len(vit.Bytes()))...)
 				hintBinary = append(hintBinary, vit.Bytes()...)
+			case compiled.LinearExpression:
+				//linear expression = []Term = []Uint64
+				hintBinary = append(hintBinary, int_to_byte(int(25443))...)
+				hintBinary = append(hintBinary, int_to_byte(len(vit))...)
+				for j := 0 ; j < len(vit) ; j++ {
+					hintBinary = append(hintBinary, uint64_to_byte(uint64(vit[j]))...)
+				}
 			default:
-				panic("unknown type") 
+				fmt.Println(reflect.TypeOf(vit))
+				panic("unknown type")
 			}
 		}
 		mhintsBinary = append(mhintsBinary, hintBinary...)
@@ -690,6 +709,11 @@ func byte_to_hintID(b []byte, offset int) (hint.ID, int) {
 	return result, 4
 }
 
+func byte_to_uint64(b []byte, offset int) (uint64, int) {
+	result := binary.LittleEndian.Uint64(b[offset : offset+8])
+	return result, 8
+}
+
 // ReadFrom attempts to decode R1CS from io.Reader using cbor
 func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 	dm, err := cbor.DecOptions{
@@ -783,7 +807,6 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 	//if err != nil {
 	//	return int64(decoder.NumBytesRead()), err
 	//}
-	t11 := time.Now()
 	//fmt.Printf("Decoding MHints Took: %0.2f minutes\n", t11.Sub(t10).Minutes())
 
 	//decode hint.bin
@@ -792,7 +815,7 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 		panic("hint.bin read error")
 	}
 	//start decode hint
-	hint := cs.ConstraintSystem.MHints
+	hint := make(map[int]*compiled.Hint)
 	bytes_used := 0
 	lenHint, offset := byte_to_int(hintFile, bytes_used)
 	bytes_used += offset
@@ -800,6 +823,18 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 		k, offset := byte_to_int(hintFile, bytes_used)
 		bytes_used += offset
 		var v compiled.Hint
+
+		mode, offset := byte_to_int(hintFile, bytes_used)
+		bytes_used += offset
+		if mode == 0 {
+			lastKey, offset := byte_to_int(hintFile, bytes_used)
+			bytes_used += offset
+			hint[k] = hint[lastKey]
+			continue
+		} else if mode == 1 {
+		} else {
+			panic("mode error")
+		}
 
 		v.ID, offset = byte_to_hintID(hintFile, bytes_used)
 		bytes_used += offset
@@ -836,12 +871,26 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 				bytes_used += bigIntLen
 				val.SetBytes(bb)
 				v.Inputs[j] = val
+			case 25443:
+				//LinearExpression
+				linLen, offset := byte_to_int(hintFile, bytes_used)
+				bytes_used += offset
+				val := make([]compiled.Term, linLen)
+				for k := 0; k < linLen; k++ {
+					uint64v, offset := byte_to_uint64(hintFile, bytes_used)
+					bytes_used += offset
+					val[k] = compiled.Term(uint64v)
+				}
+				v.Inputs[j] = compiled.LinearExpression(val)
 			default:
 				panic("typeTag error")
 			}
 		}
 		hint[k] = &v
 	}
+	cs.ConstraintSystem.MHints = hint
+	t11 := time.Now()
+	fmt.Printf("Decoding MHints Took: %0.2f minutes\n", t11.Sub(t10).Minutes())
 	err = decoder.Decode(&cs.ConstraintSystem.MHintsDependencies)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
