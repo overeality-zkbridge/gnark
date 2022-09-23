@@ -19,7 +19,6 @@ package cs
 import (
 	"errors"
 	"fmt"
-	"github.com/fxamacker/cbor/v2"
 	"io"
 	"math/big"
 	"runtime"
@@ -27,15 +26,23 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
+
+	"encoding/binary"
+	"unsafe"
+	"io/ioutil"
+
 	"github.com/consensys/gnark/backend"
+	"github.com/consensys/gnark/backend/hint"
 	"github.com/consensys/gnark/backend/witness"
 	"github.com/consensys/gnark/frontend/compiled"
 	"github.com/consensys/gnark/frontend/schema"
 	"github.com/consensys/gnark/internal/backend/ioutils"
 	"github.com/consensys/gnark/logger"
 
-	"github.com/consensys/gnark-crypto/ecc"
 	"math"
+
+	"github.com/consensys/gnark-crypto/ecc"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 
@@ -462,8 +469,78 @@ func (cs *R1CS) FrSize() int {
 	return fr.Limbs * 8
 }
 
+func int_to_byte(x int) []byte {
+	var b [8]byte
+	if unsafe.Sizeof(x) == 8 {
+		binary.LittleEndian.PutUint64(b[:], uint64(x))
+	} else {
+		panic("unknown int size")
+	}
+	return b[:]
+}
+
+func uint32_to_byte(x uint32) []byte {
+	var buf [4]byte
+	binary.LittleEndian.PutUint32(buf[:], x)
+	return buf[:]
+}
+
+func hintID_to_byte(x hint.ID) []byte {
+	//hint.ID is uint32
+	var buf [4]byte
+	binary.LittleEndian.PutUint32(buf[:], uint32(x))
+	return buf[:]
+}
+
 // WriteTo encodes R1CS into provided io.Writer using cbor
 func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
+	//Naive array to binary
+	fmt.Println("Writing R1CS to file")
+	//MHints to binary, MHints is a map from int to *Hint
+	mhints := cs.MHints
+	mhintsBinary := make([]byte, 0)
+	
+	mhintsBinary = append(mhintsBinary, byte(len(mhints)))
+
+	mhintscheck := make(map[*compiled.Hint]int)
+
+	for k, v := range mhints {
+		mhintsBinary = append(mhintsBinary, int_to_byte(k)...)
+		if _, ok := mhintscheck[v]; ok {
+			//do something here
+			panic("duplicate hint")
+		}
+		mhintscheck[v] = k
+		//Serialize a hint
+		hintBinary := make([]byte, 0)
+		hintBinary = append(hintBinary, hintID_to_byte(v.ID)...)
+		//convert array of int to array of byte
+		hintBinary = append(hintBinary, int_to_byte(len(v.Wires))...)
+		for i := 0 ; i < len(v.Wires) ; i++ {
+			hintBinary = append(hintBinary, int_to_byte(v.Wires[i])...)
+		}
+		hintBinary = append(hintBinary, int_to_byte(len(v.Inputs))...)
+		for i := 0 ; i < len(v.Inputs) ; i++ {
+			switch vit := v.Inputs[i].(type) {
+			case big.Int:
+				hintBinary = append(hintBinary, int_to_byte(int(25446))...)
+				hintBinary = append(hintBinary, vit.Bytes()...)
+			case *big.Int:
+				hintBinary = append(hintBinary, int_to_byte(int(25447))...)
+				hintBinary = append(hintBinary, vit.Bytes()...)
+			default:
+				panic("unknown type") 
+			}
+		}
+		mhintsBinary = append(mhintsBinary, hintBinary...)
+	}
+	//write mhintsBinary to hint.bin
+	err := ioutil.WriteFile("hint.bin", mhintsBinary, 0644)
+	if err != nil {
+		panic(err)
+	}
+
+	
 	_w := ioutils.WriterCounter{W: w} // wraps writer to count the bytes written
 	enc, err := cbor.CoreDetEncOptions().EncMode()
 	if err != nil {
