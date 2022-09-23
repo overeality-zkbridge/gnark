@@ -497,10 +497,11 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	//Naive array to binary
 	fmt.Println("Writing R1CS to file")
 	//MHints to binary, MHints is a map from int to *Hint
+	start := time.Now()
 	mhints := cs.MHints
 	mhintsBinary := make([]byte, 0)
 	
-	mhintsBinary = append(mhintsBinary, byte(len(mhints)))
+	mhintsBinary = append(mhintsBinary, int_to_byte(len(mhints))...)
 
 	mhintscheck := make(map[*compiled.Hint]int)
 
@@ -524,9 +525,11 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 			switch vit := v.Inputs[i].(type) {
 			case big.Int:
 				hintBinary = append(hintBinary, int_to_byte(int(25446))...)
+				hintBinary = append(hintBinary, int_to_byte(len(vit.Bytes()))...)
 				hintBinary = append(hintBinary, vit.Bytes()...)
 			case *big.Int:
 				hintBinary = append(hintBinary, int_to_byte(int(25447))...)
+				hintBinary = append(hintBinary, int_to_byte(len(vit.Bytes()))...)
 				hintBinary = append(hintBinary, vit.Bytes()...)
 			default:
 				panic("unknown type") 
@@ -539,6 +542,7 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	if err != nil {
 		panic(err)
 	}
+	fmt.Printf("write hint.bin done, took %0.2f minutes\n", time.Since(start).Minutes())
 
 	
 	_w := ioutils.WriterCounter{W: w} // wraps writer to count the bytes written
@@ -549,7 +553,7 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	encoder := enc.NewEncoder(&_w)
 
 	fmt.Printf("MHints len: %v\n", len(cs.MHints))
-
+	
 	// encode our object
 	//err = encoder.Encode(cs)
 
@@ -630,13 +634,12 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	t10 := time.Now()
 	fmt.Printf("Encoding Counters Took: %0.2f minutes\n", t10.Sub(t9).Minutes())
 
-	err = encoder.Encode(cs.ConstraintSystem.MHints)
-	if err != nil {
-		return _w.N, err
-	}
+	//err = encoder.Encode(cs.ConstraintSystem.MHints)
+	//if err != nil {
+	//	return _w.N, err
+	//}
+	//fmt.Printf("Encoding MHints Took: %0.2f minutes\n", t11.Sub(t10).Minutes())
 	t11 := time.Now()
-	fmt.Printf("Encoding MHints Took: %0.2f minutes\n", t11.Sub(t10).Minutes())
-
 	err = encoder.Encode(cs.ConstraintSystem.MHintsDependencies)
 	if err != nil {
 		return _w.N, err
@@ -673,6 +676,18 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	fmt.Printf("Encoding Coefficients Took: %0.2f minutes\n", t16.Sub(t16).Minutes())
 
 	return _w.N, err
+}
+
+func byte_to_int(b []byte, offset int) (int, int) {
+	result_uint64 := binary.LittleEndian.Uint64(b[offset : offset+8])
+	result := int(result_uint64)
+	return result, 8
+}
+
+func byte_to_hintID(b []byte, offset int) (hint.ID, int) {
+	result_uint32 := binary.LittleEndian.Uint32(b[offset : offset+4])
+	result := hint.ID(result_uint32)
+	return result, 4
 }
 
 // ReadFrom attempts to decode R1CS from io.Reader using cbor
@@ -764,13 +779,69 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 	t10 := time.Now()
 	fmt.Printf("Decoding Counters Took: %0.2f minutes\n", t10.Sub(t9).Minutes())
 
-	err = decoder.Decode(&cs.ConstraintSystem.MHints)
-	if err != nil {
-		return int64(decoder.NumBytesRead()), err
-	}
+	//err = decoder.Decode(&cs.ConstraintSystem.MHints)
+	//if err != nil {
+	//	return int64(decoder.NumBytesRead()), err
+	//}
 	t11 := time.Now()
-	fmt.Printf("Decoding MHints Took: %0.2f minutes\n", t11.Sub(t10).Minutes())
+	//fmt.Printf("Decoding MHints Took: %0.2f minutes\n", t11.Sub(t10).Minutes())
 
+	//decode hint.bin
+	hintFile, err := ioutil.ReadFile("hint.bin")
+	if err != nil {
+		panic("hint.bin read error")
+	}
+	//start decode hint
+	hint := cs.ConstraintSystem.MHints
+	bytes_used := 0
+	lenHint, offset := byte_to_int(hintFile, bytes_used)
+	bytes_used += offset
+	for i := 0; i < lenHint; i++ {
+		k, offset := byte_to_int(hintFile, bytes_used)
+		bytes_used += offset
+		var v compiled.Hint
+
+		v.ID, offset = byte_to_hintID(hintFile, bytes_used)
+		bytes_used += offset
+		
+		wireLen, offset := byte_to_int(hintFile, bytes_used)
+		bytes_used += offset
+		v.Wires = make([]int, wireLen)
+		for j := 0; j < wireLen; j++ {
+			v.Wires[j], offset = byte_to_int(hintFile, bytes_used)
+			bytes_used += offset
+		}
+		inputLen, offset := byte_to_int(hintFile, bytes_used)
+		bytes_used += offset
+		v.Inputs = make([]interface{}, inputLen)
+		for j := 0; j < inputLen; j++ {
+			typeTag, offset := byte_to_int(hintFile, bytes_used)
+			bytes_used += offset
+			switch typeTag {
+			case 25446:
+				//big.Int
+				val := new(big.Int)
+				bigIntLen, offset := byte_to_int(hintFile, bytes_used)
+				bytes_used += offset
+				bb := hintFile[bytes_used: bytes_used+bigIntLen]
+				bytes_used += bigIntLen
+				val.SetBytes(bb)
+				v.Inputs[j] = *val
+			case 25447:
+				//*big.Int
+				val := new(big.Int)
+				bigIntLen, offset := byte_to_int(hintFile, bytes_used)
+				bytes_used += offset
+				bb := hintFile[bytes_used: bytes_used+bigIntLen]
+				bytes_used += bigIntLen
+				val.SetBytes(bb)
+				v.Inputs[j] = val
+			default:
+				panic("typeTag error")
+			}
+		}
+		hint[k] = &v
+	}
 	err = decoder.Decode(&cs.ConstraintSystem.MHintsDependencies)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
