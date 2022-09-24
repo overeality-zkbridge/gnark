@@ -250,7 +250,10 @@ func readG1AffineArray(r io.Reader, directout bool, filename string) ([]curve.G1
 	var result []curve.G1Affine
 
 	if directout {
+		t2 := time.Now()
 		fileBytes, err := ioutil.ReadFile(filename)
+		t3 := time.Now()
+		fmt.Println("readG1AffineArray read file", t3.Sub(t2))
 		if err != nil {
 			fmt.Println("readG1AffineArray error")
 			panic(err)
