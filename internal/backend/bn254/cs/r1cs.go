@@ -724,9 +724,9 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-
+	start := time.Now()
 	decoder := dm.NewDecoder(r)
-
+	fmt.Printf("Decoder Created Took: %0.2f minutes\n", time.Now().Sub(start).Minutes())
 	//if err := decoder.Decode(&cs); err != nil {
 	//	return int64(decoder.NumBytesRead()), err
 	//}
