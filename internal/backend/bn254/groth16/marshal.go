@@ -19,14 +19,13 @@ package groth16
 import (
 	"encoding/binary"
 	"fmt"
-	"io"
-	"unsafe"
-	"io/ioutil"
-	"time"
-
 	curve "github.com/consensys/gnark-crypto/ecc/bn254"
 	"github.com/consensys/gnark-crypto/ecc/bn254/fp"
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
+	"io"
+	"io/ioutil"
+	"time"
+	"unsafe"
 )
 
 // WriteTo writes binary encoding of the Proof elements to writer
@@ -255,7 +254,7 @@ func G2AffineArrayToBytes(e []curve.G2Affine) []byte {
 	return result
 }
 
-func readG1AffineArray(r io.Reader, directout bool, filename string) ([]curve.G1Affine) {
+func readG1AffineArray(r io.Reader, directout bool, filename string) []curve.G1Affine {
 	fmt.Println("readG1AffineArray")
 	t0 := time.Now()
 	var result []curve.G1Affine
@@ -293,7 +292,7 @@ func readG1AffineArray(r io.Reader, directout bool, filename string) ([]curve.G1
 	return result
 }
 
-func readG2AffineArray(r io.Reader, directout bool, filename string) ([]curve.G2Affine) {
+func readG2AffineArray(r io.Reader, directout bool, filename string) []curve.G2Affine {
 	fmt.Println("readG2AffineArray")
 	t0 := time.Now()
 	var result []curve.G2Affine
@@ -326,7 +325,6 @@ func readG2AffineArray(r io.Reader, directout bool, filename string) ([]curve.G2
 	fmt.Println("readG2AffineArray time:", time.Since(t0))
 	return result
 }
-
 
 func int_to_byte(x int) []byte {
 	var b [8]byte
@@ -414,44 +412,44 @@ func ReadBoolArray(r io.Reader) []bool {
 func (pk *ProvingKey) writeTo(w io.Writer, raw bool) (int64, error) {
 	fmt.Println("Writing Proving Key")
 	/*
-	n, err := pk.Domain.WriteTo(w)
-	if err != nil {
-		return n, err
-	}
-
-	var enc *curve.Encoder
-	if raw {
-		enc = curve.NewEncoder(w, curve.RawEncoding())
-	} else {
-		enc = curve.NewEncoder(w)
-	}
-	nbWires := uint64(len(pk.InfinityA))
-
-	toEncode := []interface{}{
-		&pk.G1.Alpha,
-		&pk.G1.Beta,
-		&pk.G1.Delta,
-		pk.G1.A,
-		pk.G1.B,
-		pk.G1.Z,
-		pk.G1.K,
-		&pk.G2.Beta,
-		&pk.G2.Delta,
-		pk.G2.B,
-		nbWires,
-		pk.NbInfinityA,
-		pk.NbInfinityB,
-		pk.InfinityA,
-		pk.InfinityB,
-	}
-
-	for _, v := range toEncode {
-		if err := enc.Encode(v); err != nil {
-			return n + enc.BytesWritten(), err
+		n, err := pk.Domain.WriteTo(w)
+		if err != nil {
+			return n, err
 		}
-	}
 
-	return n + enc.BytesWritten(), nil
+		var enc *curve.Encoder
+		if raw {
+			enc = curve.NewEncoder(w, curve.RawEncoding())
+		} else {
+			enc = curve.NewEncoder(w)
+		}
+		nbWires := uint64(len(pk.InfinityA))
+
+		toEncode := []interface{}{
+			&pk.G1.Alpha,
+			&pk.G1.Beta,
+			&pk.G1.Delta,
+			pk.G1.A,
+			pk.G1.B,
+			pk.G1.Z,
+			pk.G1.K,
+			&pk.G2.Beta,
+			&pk.G2.Delta,
+			pk.G2.B,
+			nbWires,
+			pk.NbInfinityA,
+			pk.NbInfinityB,
+			pk.InfinityA,
+			pk.InfinityB,
+		}
+
+		for _, v := range toEncode {
+			if err := enc.Encode(v); err != nil {
+				return n + enc.BytesWritten(), err
+			}
+		}
+
+		return n + enc.BytesWritten(), nil
 	*/
 	//domain
 	w.Write(uint64_to_byte(pk.Domain.Cardinality))
@@ -460,34 +458,30 @@ func (pk *ProvingKey) writeTo(w io.Writer, raw bool) (int64, error) {
 	w.Write(frElement_to_byte(pk.Domain.GeneratorInv))
 	w.Write(frElement_to_byte(pk.Domain.FrMultiplicativeGen))
 	w.Write(frElement_to_byte(pk.Domain.FrMultiplicativeGenInv))
-	
-	ioutil.WriteFile("twiddle.bin", frElementArrayToByteDim2(pk.Domain.Twiddles), 0644)
-	ioutil.WriteFile("twiddleinv.bin", frElementArrayToByteDim2(pk.Domain.TwiddlesInv), 0644)
-	ioutil.WriteFile("cosettable.bin", frElementArrayToByte(pk.Domain.CosetTable), 0644)
-	ioutil.WriteFile("cosettablereversed.bin", frElementArrayToByte(pk.Domain.CosetTableReversed), 0644)
-	ioutil.WriteFile("cosettableinv.bin", frElementArrayToByte(pk.Domain.CosetTableInv), 0644)
-	ioutil.WriteFile("cosettableinvreversed.bin", frElementArrayToByte(pk.Domain.CosetTableInvReversed), 0644)
 
+	w.Write(frElementArrayToByteDim2(pk.Domain.Twiddles))
+	w.Write(frElementArrayToByteDim2(pk.Domain.TwiddlesInv))
+
+	w.Write(frElementArrayToByte(pk.Domain.CosetTable))
+	w.Write(frElementArrayToByte(pk.Domain.CosetTableReversed))
+	w.Write(frElementArrayToByte(pk.Domain.CosetTableInv))
+	w.Write(frElementArrayToByte(pk.Domain.CosetTableInvReversed))
 
 	// G1
 	w.Write(G1AffineToBytes(pk.G1.Alpha))
 	w.Write(G1AffineToBytes(pk.G1.Beta))
 	w.Write(G1AffineToBytes(pk.G1.Delta))
 
-	//w.Write(G1AffineArrayToBytes(pk.G1.A))
-	//w.Write(G1AffineArrayToBytes(pk.G1.B))
-	//w.Write(G1AffineArrayToBytes(pk.G1.Z))
-	//w.Write(G1AffineArrayToBytes(pk.G1.K))
-	ioutil.WriteFile("g1a.bin", G1AffineArrayToBytes(pk.G1.A), 0644)
-	ioutil.WriteFile("g1b.bin", G1AffineArrayToBytes(pk.G1.B), 0644)
-	ioutil.WriteFile("g1z.bin", G1AffineArrayToBytes(pk.G1.Z), 0644)
-	ioutil.WriteFile("g1k.bin", G1AffineArrayToBytes(pk.G1.K), 0644)
+	w.Write(G1AffineArrayToBytes(pk.G1.A))
+	w.Write(G1AffineArrayToBytes(pk.G1.B))
+	w.Write(G1AffineArrayToBytes(pk.G1.Z))
+	w.Write(G1AffineArrayToBytes(pk.G1.K))
 
 	//G2
 	w.Write(G2AffineToBytes(pk.G2.Beta))
 	w.Write(G2AffineToBytes(pk.G2.Delta))
-	//w.Write(G2AffineArrayToBytes(pk.G2.B))
-	ioutil.WriteFile("g2b.bin", G2AffineArrayToBytes(pk.G2.B), 0644)
+	w.Write(G2AffineArrayToBytes(pk.G2.B))
+
 	//nbWires
 	w.Write(uint64_to_byte(uint64(len(pk.InfinityA))))
 	//nbInfinityA
@@ -515,40 +509,39 @@ func (pk *ProvingKey) UnsafeReadFrom(r io.Reader) (int64, error) {
 	return pk.readFrom(r, curve.NoSubgroupChecks())
 }
 
-func byte_to_int(b []byte) (int) {
-	result_uint64 := binary.LittleEndian.Uint64(b[ : 8])
+func byte_to_int(b []byte) int {
+	result_uint64 := binary.LittleEndian.Uint64(b[:8])
 	result := int(result_uint64)
 	return result
 }
 
-
-func byte_to_uint64(b []byte) (uint64) {
-	result := binary.LittleEndian.Uint64(b[ : 8])
+func byte_to_uint64(b []byte) uint64 {
+	result := binary.LittleEndian.Uint64(b[:8])
 	return result
 }
 
-func byte_to_frElement(b []byte) (fr.Element) {
+func byte_to_frElement(b []byte) fr.Element {
 	var result fr.Element
-	result[0] = binary.LittleEndian.Uint64(b[ : 8])
-	result[1] = binary.LittleEndian.Uint64(b[8 : 16])
-	result[2] = binary.LittleEndian.Uint64(b[16 : 24])
-	result[3] = binary.LittleEndian.Uint64(b[24 : 32])
+	result[0] = binary.LittleEndian.Uint64(b[:8])
+	result[1] = binary.LittleEndian.Uint64(b[8:16])
+	result[2] = binary.LittleEndian.Uint64(b[16:24])
+	result[3] = binary.LittleEndian.Uint64(b[24:32])
 	return result
 }
 
-func readFrElementArray(r io.Reader, directout bool, filename string) ([]fr.Element) {
+func readFrElementArray(r io.Reader, directout bool, filename string) []fr.Element {
 	var result []fr.Element
 	if directout {
 		fileBytes, err := ioutil.ReadFile(filename)
 		if err != nil {
 			panic(err)
 		}
-		lengthByte := fileBytes[ : 8]
+		lengthByte := fileBytes[:8]
 		byteUsed := 8
 		length := byte_to_int(lengthByte)
 		result = make([]fr.Element, length)
 		for i := 0; i < length; i++ {
-			result[i] = byte_to_frElement(fileBytes[byteUsed : byteUsed + 32])
+			result[i] = byte_to_frElement(fileBytes[byteUsed : byteUsed+32])
 			byteUsed += 32
 		}
 	} else {
@@ -565,7 +558,7 @@ func readFrElementArray(r io.Reader, directout bool, filename string) ([]fr.Elem
 	return result
 }
 
-func readFrElementArrayDim2(r io.Reader, directout bool, filename string) ([][]fr.Element) {
+func readFrElementArrayDim2(r io.Reader, directout bool, filename string) [][]fr.Element {
 	fmt.Println("Reading FrElementArrayDim2")
 	t0 := time.Now()
 	var result [][]fr.Element
@@ -576,16 +569,16 @@ func readFrElementArrayDim2(r io.Reader, directout bool, filename string) ([][]f
 			fmt.Println("Error reading file")
 			panic(err)
 		}
-		lengthByte := fileBytes[ : 8]
+		lengthByte := fileBytes[:8]
 		byteUsed := 8
 		length := byte_to_int(lengthByte)
 		for i := 0; i < length; i++ {
-			lengthByte2 := fileBytes[byteUsed : byteUsed + 8]
+			lengthByte2 := fileBytes[byteUsed : byteUsed+8]
 			length2 := byte_to_int(lengthByte2)
 			byteUsed += 8
 			result2 := make([]fr.Element, length2)
 			for j := 0; j < length2; j++ {
-				frByte := fileBytes[byteUsed : byteUsed + 32]
+				frByte := fileBytes[byteUsed : byteUsed+32]
 				result2[j] = byte_to_frElement(frByte)
 				byteUsed += 32
 			}
@@ -598,82 +591,81 @@ func readFrElementArrayDim2(r io.Reader, directout bool, filename string) ([][]f
 		for i := 0; i < length; i++ {
 			result = append(result, readFrElementArray(r, false, ""))
 		}
-	}	
+	}
 	t1 := time.Now()
 	fmt.Println("Reading FrElementArrayDim2 took", t1.Sub(t0))
 	return result
 }
 
-func byte_to_fpElement(b []byte) (fp.Element) {
+func byte_to_fpElement(b []byte) fp.Element {
 	var result fp.Element
-	result[0] = binary.LittleEndian.Uint64(b[ : 8])
-	result[1] = binary.LittleEndian.Uint64(b[8 : 16])
-	result[2] = binary.LittleEndian.Uint64(b[16 : 24])
-	result[3] = binary.LittleEndian.Uint64(b[24 : 32])
+	result[0] = binary.LittleEndian.Uint64(b[:8])
+	result[1] = binary.LittleEndian.Uint64(b[8:16])
+	result[2] = binary.LittleEndian.Uint64(b[16:24])
+	result[3] = binary.LittleEndian.Uint64(b[24:32])
 	return result
 }
 
-func byte_to_G1Affine(b []byte) (curve.G1Affine) {
+func byte_to_G1Affine(b []byte) curve.G1Affine {
 	var result curve.G1Affine
-	result.X = byte_to_fpElement(b[ : 32])
-	result.Y = byte_to_fpElement(b[32 : 64])
+	result.X = byte_to_fpElement(b[:32])
+	result.Y = byte_to_fpElement(b[32:64])
 	return result
 }
 
-func byte_to_G2Affine(b []byte) (curve.G2Affine) {
+func byte_to_G2Affine(b []byte) curve.G2Affine {
 	var result curve.G2Affine
-	result.X.A0 = byte_to_fpElement(b[ : 32])
-	result.X.A1 = byte_to_fpElement(b[32 : 64])
-	result.Y.A0 = byte_to_fpElement(b[64 : 96])
-	result.Y.A1 = byte_to_fpElement(b[96 : 128])
+	result.X.A0 = byte_to_fpElement(b[:32])
+	result.X.A1 = byte_to_fpElement(b[32:64])
+	result.Y.A0 = byte_to_fpElement(b[64:96])
+	result.Y.A1 = byte_to_fpElement(b[96:128])
 	return result
 }
-
 
 func (pk *ProvingKey) readFrom(r io.Reader, decOptions ...func(*curve.Decoder)) (int64, error) {
 	fmt.Println("Reading proving key")
 	/*
-	n, err := pk.Domain.ReadFrom(r)
-	if err != nil {
-		return n, err
-	}
+		n, err := pk.Domain.ReadFrom(r)
+		if err != nil {
+			return n, err
+		}
 
-	dec := curve.NewDecoder(r, decOptions...)
+		dec := curve.NewDecoder(r, decOptions...)
 
-	var nbWires uint64
+		var nbWires uint64
 
-	toDecode := []interface{}{
-		&pk.G1.Alpha,
-		&pk.G1.Beta,
-		&pk.G1.Delta,
-		&pk.G1.A,
-		&pk.G1.B,
-		&pk.G1.Z,
-		&pk.G1.K,
-		&pk.G2.Beta,
-		&pk.G2.Delta,
-		&pk.G2.B,
-		&nbWires,
-		&pk.NbInfinityA,
-		&pk.NbInfinityB,
-	}
+		toDecode := []interface{}{
+			&pk.G1.Alpha,
+			&pk.G1.Beta,
+			&pk.G1.Delta,
+			&pk.G1.A,
+			&pk.G1.B,
+			&pk.G1.Z,
+			&pk.G1.K,
+			&pk.G2.Beta,
+			&pk.G2.Delta,
+			&pk.G2.B,
+			&nbWires,
+			&pk.NbInfinityA,
+			&pk.NbInfinityB,
+		}
 
-	for _, v := range toDecode {
-		if err := dec.Decode(v); err != nil {
+		for _, v := range toDecode {
+			if err := dec.Decode(v); err != nil {
+				return n + dec.BytesRead(), err
+			}
+		}
+		pk.InfinityA = make([]bool, nbWires)
+		pk.InfinityB = make([]bool, nbWires)
+
+		if err := dec.Decode(&pk.InfinityA); err != nil {
 			return n + dec.BytesRead(), err
 		}
-	}
-	pk.InfinityA = make([]bool, nbWires)
-	pk.InfinityB = make([]bool, nbWires)
+		if err := dec.Decode(&pk.InfinityB); err != nil {
+			return n + dec.BytesRead(), err
+		}
 
-	if err := dec.Decode(&pk.InfinityA); err != nil {
-		return n + dec.BytesRead(), err
-	}
-	if err := dec.Decode(&pk.InfinityB); err != nil {
-		return n + dec.BytesRead(), err
-	}
-
-	return n + dec.BytesRead(), nil
+		return n + dec.BytesRead(), nil
 	*/
 	//domain
 	pkDomainCardinalityBytes := make([]byte, 8)
@@ -697,18 +689,21 @@ func (pk *ProvingKey) readFrom(r io.Reader, decOptions ...func(*curve.Decoder)) 
 
 	//Twiddles
 	fmt.Println("Reading Twiddles")
-	pk.Domain.Twiddles = readFrElementArrayDim2(r, true, "twiddle.bin")
+	pk.Domain.Twiddles = readFrElementArrayDim2(r, false, "twiddle.bin")
 	fmt.Println("Reading TwiddlesInv")
-	pk.Domain.TwiddlesInv = readFrElementArrayDim2(r, true, "twiddleinv.bin")
+	pk.Domain.TwiddlesInv = readFrElementArrayDim2(r, false, "twiddleinv.bin")
 	fmt.Println("Reading CosetTable")
-	pk.Domain.CosetTable = readFrElementArray(r, true, "cosettable.bin")
+
+	//pk.Domain.CosetTable = readFrElementArray(r, true, "cosettable.bin")
+	pk.Domain.CosetTable = readFrElementArray(r, false, "cosettable.bin")
 	fmt.Println("Reading CosetTableReversed")
-	pk.Domain.CosetTableReversed = readFrElementArray(r, true, "cosettablereversed.bin")
+
+	pk.Domain.CosetTableReversed = readFrElementArray(r, false, "cosettablereversed.bin")
 	fmt.Println("Reading CosetTableInv")
-	pk.Domain.CosetTableInv = readFrElementArray(r, true, "cosettableinv.bin")
+	pk.Domain.CosetTableInv = readFrElementArray(r, false, "cosettableinv.bin")
 	fmt.Println("Reading CosetTableInvReversed")
-	pk.Domain.CosetTableInvReversed = readFrElementArray(r, true, "cosettableinvreversed.bin")
-	
+	pk.Domain.CosetTableInvReversed = readFrElementArray(r, false, "cosettableinvreversed.bin")
+
 	//G1
 	pkG1AlphaBytes := make([]byte, 64)
 	r.Read(pkG1AlphaBytes)
@@ -721,13 +716,13 @@ func (pk *ProvingKey) readFrom(r io.Reader, decOptions ...func(*curve.Decoder)) 
 	pk.G1.Delta = byte_to_G1Affine(pkG1DeltaBytes)
 
 	fmt.Println("Reading G1A")
-	pk.G1.A = readG1AffineArray(r, true, "g1a.bin")
+	pk.G1.A = readG1AffineArray(r, false, "g1a.bin")
 	fmt.Println("Reading G1B")
-	pk.G1.B = readG1AffineArray(r, true, "g1b.bin")
+	pk.G1.B = readG1AffineArray(r, false, "g1b.bin")
 	fmt.Println("Reading G1Z")
-	pk.G1.Z = readG1AffineArray(r, true, "g1z.bin")
+	pk.G1.Z = readG1AffineArray(r, false, "g1z.bin")
 	fmt.Println("Reading G1K")
-	pk.G1.K = readG1AffineArray(r, true, "g1k.bin")
+	pk.G1.K = readG1AffineArray(r, false, "g1k.bin")
 
 	//g2
 	pkG2BetaBytes := make([]byte, 128)
@@ -737,7 +732,7 @@ func (pk *ProvingKey) readFrom(r io.Reader, decOptions ...func(*curve.Decoder)) 
 	r.Read(pkG2DeltaBytes)
 	pk.G2.Delta = byte_to_G2Affine(pkG2DeltaBytes)
 	fmt.Println("Reading G2B")
-	pk.G2.B = readG2AffineArray(r, true, "g2b.bin")
+	pk.G2.B = readG2AffineArray(r, false, "g2b.bin")
 
 	//nbWires
 	var nbWires uint64
@@ -766,7 +761,6 @@ func (pk *ProvingKey) readFrom(r io.Reader, decOptions ...func(*curve.Decoder)) 
 	if len(pk.InfinityB) != int(nbWires) {
 		panic("pk.InfinityB length is not equal to nbWires")
 	}
-
 
 	return 0, nil
 }
