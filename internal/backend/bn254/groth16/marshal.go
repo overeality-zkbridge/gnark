@@ -205,7 +205,18 @@ func (pk *ProvingKey) WriteRawTo(w io.Writer) (n int64, err error) {
 }
 
 func FpElementToBytes(e fp.Element) []byte {
-	b := e.Bytes()
+	//b := e.Bytes()
+	var b [32]byte
+	var data [4]uint64
+	data[0] = e[0]
+	data[1] = e[1]
+	data[2] = e[2]
+	data[3] = e[3]
+
+	binary.LittleEndian.PutUint64(b[0:8], data[0])
+	binary.LittleEndian.PutUint64(b[8:16], data[1])
+	binary.LittleEndian.PutUint64(b[16:24], data[2])
+	binary.LittleEndian.PutUint64(b[24:32], data[3])
 	return b[:]
 }
 
@@ -261,19 +272,21 @@ func readG1AffineArray(r io.Reader, directout bool, filename string) ([]curve.G1
 
 		length := byte_to_int(fileBytes[:8])
 		usedBytes := 8
+		result = make([]curve.G1Affine, length)
 		for i := 0; i < length; i++ {
 			g1Bytes := fileBytes[usedBytes : usedBytes+64]
 			usedBytes += 64
-			result = append(result, byte_to_G1Affine(g1Bytes))
+			result[i] = byte_to_G1Affine(g1Bytes)
 		}
 	} else {
 		lengthByte := make([]byte, 8)
 		r.Read(lengthByte)
 		length := byte_to_int(lengthByte)
+		result = make([]curve.G1Affine, length)
 		for i := 0; i < length; i++ {
 			g1Bytes := make([]byte, 64)
 			r.Read(g1Bytes)
-			result = append(result, byte_to_G1Affine(g1Bytes))
+			result[i] = byte_to_G1Affine(g1Bytes)
 		}
 	}
 	fmt.Println("readG1AffineArray time:", time.Since(t0))
@@ -293,19 +306,21 @@ func readG2AffineArray(r io.Reader, directout bool, filename string) ([]curve.G2
 		}
 		length := byte_to_int(fileBytes[:8])
 		usedBytes := 8
+		result = make([]curve.G2Affine, length)
 		for i := 0; i < length; i++ {
 			g2Bytes := fileBytes[usedBytes : usedBytes+128]
 			usedBytes += 128
-			result = append(result, byte_to_G2Affine(g2Bytes))
+			result[i] = byte_to_G2Affine(g2Bytes)
 		}
 	} else {
 		lengthByte := make([]byte, 8)
 		r.Read(lengthByte)
 		length := byte_to_int(lengthByte)
+		result = make([]curve.G2Affine, length)
 		for i := 0; i < length; i++ {
 			g2Bytes := make([]byte, 128)
 			r.Read(g2Bytes)
-			result = append(result, byte_to_G2Affine(g2Bytes))
+			result[i] = byte_to_G2Affine(g2Bytes)
 		}
 	}
 	fmt.Println("readG2AffineArray time:", time.Since(t0))
@@ -336,7 +351,15 @@ func uint32_to_byte(x uint32) []byte {
 }
 
 func frElement_to_byte(e fr.Element) []byte {
-	b := e.Bytes()
+	var b [32]byte
+	var data [4]uint64
+	data[0] = e[0]
+	data[1] = e[1]
+	data[2] = e[2]
+	data[3] = e[3]
+	for i := 0; i < 4; i++ {
+		binary.LittleEndian.PutUint64(b[i*8:], data[i])
+	}
 	return b[:]
 }
 
@@ -506,7 +529,10 @@ func byte_to_uint64(b []byte) (uint64) {
 
 func byte_to_frElement(b []byte) (fr.Element) {
 	var result fr.Element
-	result.SetBytes(b[ : 32])
+	result[0] = binary.LittleEndian.Uint64(b[ : 8])
+	result[1] = binary.LittleEndian.Uint64(b[8 : 16])
+	result[2] = binary.LittleEndian.Uint64(b[16 : 24])
+	result[3] = binary.LittleEndian.Uint64(b[24 : 32])
 	return result
 }
 
@@ -520,18 +546,20 @@ func readFrElementArray(r io.Reader, directout bool, filename string) ([]fr.Elem
 		lengthByte := fileBytes[ : 8]
 		byteUsed := 8
 		length := byte_to_int(lengthByte)
+		result = make([]fr.Element, length)
 		for i := 0; i < length; i++ {
-			result = append(result, byte_to_frElement(fileBytes[byteUsed : byteUsed + 32]))
+			result[i] = byte_to_frElement(fileBytes[byteUsed : byteUsed + 32])
 			byteUsed += 32
 		}
 	} else {
 		lengthByte := make([]byte, 8)
 		r.Read(lengthByte)
 		length := byte_to_int(lengthByte)
+		result = make([]fr.Element, length)
 		for i := 0; i < length; i++ {
 			frByte := make([]byte, 32)
 			r.Read(frByte)
-			result = append(result, byte_to_frElement(frByte))
+			result[i] = byte_to_frElement(frByte)
 		}
 	}
 	return result
@@ -552,13 +580,13 @@ func readFrElementArrayDim2(r io.Reader, directout bool, filename string) ([][]f
 		byteUsed := 8
 		length := byte_to_int(lengthByte)
 		for i := 0; i < length; i++ {
-			var result2 []fr.Element
 			lengthByte2 := fileBytes[byteUsed : byteUsed + 8]
 			length2 := byte_to_int(lengthByte2)
 			byteUsed += 8
+			result2 := make([]fr.Element, length2)
 			for j := 0; j < length2; j++ {
 				frByte := fileBytes[byteUsed : byteUsed + 32]
-				result2 = append(result2, byte_to_frElement(frByte))
+				result2[j] = byte_to_frElement(frByte)
 				byteUsed += 32
 			}
 			result = append(result, result2)
@@ -576,19 +604,28 @@ func readFrElementArrayDim2(r io.Reader, directout bool, filename string) ([][]f
 	return result
 }
 
+func byte_to_fpElement(b []byte) (fp.Element) {
+	var result fp.Element
+	result[0] = binary.LittleEndian.Uint64(b[ : 8])
+	result[1] = binary.LittleEndian.Uint64(b[8 : 16])
+	result[2] = binary.LittleEndian.Uint64(b[16 : 24])
+	result[3] = binary.LittleEndian.Uint64(b[24 : 32])
+	return result
+}
+
 func byte_to_G1Affine(b []byte) (curve.G1Affine) {
 	var result curve.G1Affine
-	result.X.SetBytes(b[ : 32])
-	result.Y.SetBytes(b[32 : 64])
+	result.X = byte_to_fpElement(b[ : 32])
+	result.Y = byte_to_fpElement(b[32 : 64])
 	return result
 }
 
 func byte_to_G2Affine(b []byte) (curve.G2Affine) {
 	var result curve.G2Affine
-	result.X.A0.SetBytes(b[ : 32])
-	result.X.A1.SetBytes(b[32 : 64])
-	result.Y.A0.SetBytes(b[64 : 96])
-	result.Y.A1.SetBytes(b[96 : 128])
+	result.X.A0 = byte_to_fpElement(b[ : 32])
+	result.X.A1 = byte_to_fpElement(b[32 : 64])
+	result.Y.A0 = byte_to_fpElement(b[64 : 96])
+	result.Y.A1 = byte_to_fpElement(b[96 : 128])
 	return result
 }
 
