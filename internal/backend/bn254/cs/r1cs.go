@@ -19,23 +19,30 @@ package cs
 import (
 	"errors"
 	"fmt"
-	"github.com/fxamacker/cbor/v2"
 	"io"
 	"math/big"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
+
+	"encoding/binary"
+	"unsafe"
+
 	"github.com/consensys/gnark/backend"
+	"github.com/consensys/gnark/backend/hint"
 	"github.com/consensys/gnark/backend/witness"
 	"github.com/consensys/gnark/frontend/compiled"
 	"github.com/consensys/gnark/frontend/schema"
 	"github.com/consensys/gnark/internal/backend/ioutils"
 	"github.com/consensys/gnark/logger"
 
-	"github.com/consensys/gnark-crypto/ecc"
 	"math"
+
+	"github.com/consensys/gnark-crypto/ecc"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 
@@ -462,8 +469,54 @@ func (cs *R1CS) FrSize() int {
 	return fr.Limbs * 8
 }
 
+func int_to_byte(x int) []byte {
+	var b [8]byte
+	if unsafe.Sizeof(x) == 8 {
+		binary.LittleEndian.PutUint64(b[:], uint64(x))
+	} else {
+		panic("unknown int size")
+	}
+	return b[:]
+}
+
+func uint64_to_byte(x uint64) []byte {
+	var b [8]byte
+	binary.LittleEndian.PutUint64(b[:], x)
+	return b[:]
+}
+
+func uint32_to_byte(x uint32) []byte {
+	var buf [4]byte
+	binary.LittleEndian.PutUint32(buf[:], x)
+	return buf[:]
+}
+
+func hintID_to_byte(x hint.ID) []byte {
+	//hint.ID is uint32
+	var buf [4]byte
+	binary.LittleEndian.PutUint32(buf[:], uint32(x))
+	return buf[:]
+}
+
 // WriteTo encodes R1CS into provided io.Writer using cbor
 func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
+	//Naive array to binary
+	fmt.Println("Writing R1CS to file")
+	//MHints to binary, MHints is a map from int to *Hint
+	start := time.Now()
+
+	mhintsBinary := encodeMHints(cs.MHints)
+
+	_, err := w.Write(uint64_to_byte(uint64(len(mhintsBinary))))
+	if err != nil {
+		panic(err)
+	}
+	_, err = w.Write(mhintsBinary)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Encoding MHints done, took %0.2f minutes\n", time.Since(start).Minutes())
+
 	_w := ioutils.WriterCounter{W: w} // wraps writer to count the bytes written
 	enc, err := cbor.CoreDetEncOptions().EncMode()
 	if err != nil {
@@ -553,13 +606,12 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	t10 := time.Now()
 	fmt.Printf("Encoding Counters Took: %0.2f minutes\n", t10.Sub(t9).Minutes())
 
-	err = encoder.Encode(cs.ConstraintSystem.MHints)
-	if err != nil {
-		return _w.N, err
-	}
+	//err = encoder.Encode(cs.ConstraintSystem.MHints)
+	//if err != nil {
+	//	return _w.N, err
+	//}
+	//fmt.Printf("Encoding MHints Took: %0.2f minutes\n", t11.Sub(t10).Minutes())
 	t11 := time.Now()
-	fmt.Printf("Encoding MHints Took: %0.2f minutes\n", t11.Sub(t10).Minutes())
-
 	err = encoder.Encode(cs.ConstraintSystem.MHintsDependencies)
 	if err != nil {
 		return _w.N, err
@@ -598,6 +650,23 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	return _w.N, err
 }
 
+func byte_to_int(b []byte, offset int) (int, int) {
+	result_uint64 := binary.LittleEndian.Uint64(b[offset : offset+8])
+	result := int(result_uint64)
+	return result, 8
+}
+
+func byte_to_hintID(b []byte, offset int) (hint.ID, int) {
+	result_uint32 := binary.LittleEndian.Uint32(b[offset : offset+4])
+	result := hint.ID(result_uint32)
+	return result, 4
+}
+
+func byte_to_uint64(b []byte, offset int) (uint64, int) {
+	result := binary.LittleEndian.Uint64(b[offset : offset+8])
+	return result, 8
+}
+
 // ReadFrom attempts to decode R1CS from io.Reader using cbor
 func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 	dm, err := cbor.DecOptions{
@@ -608,14 +677,19 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-
-	decoder := dm.NewDecoder(r)
-
+	//start := time.Now()
+	//fmt.Printf("Decoder Created Took: %0.2f minutes\n", time.Now().Sub(start).Minutes())
 	//if err := decoder.Decode(&cs); err != nil {
 	//	return int64(decoder.NumBytesRead()), err
 	//}
 
 	cs.ConstraintSystem.Schema = &schema.Schema{}
+	cs.ConstraintSystem.MHints, err = decodeMHints(r)
+	if err != nil {
+		return 0, err
+	}
+
+	decoder := dm.NewDecoder(r)
 	t0 := time.Now()
 	err = decoder.Decode(cs.ConstraintSystem.Schema)
 	if err != nil {
@@ -687,13 +761,8 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 	t10 := time.Now()
 	fmt.Printf("Decoding Counters Took: %0.2f minutes\n", t10.Sub(t9).Minutes())
 
-	err = decoder.Decode(&cs.ConstraintSystem.MHints)
-	if err != nil {
-		return int64(decoder.NumBytesRead()), err
-	}
 	t11 := time.Now()
-	fmt.Printf("Decoding MHints Took: %0.2f minutes\n", t11.Sub(t10).Minutes())
-
+	//fmt.Printf("Decoding MHints Took: %0.2f minutes\n", t11.Sub(t10).Minutes())
 	err = decoder.Decode(&cs.ConstraintSystem.MHintsDependencies)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
@@ -733,4 +802,152 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 	fmt.Printf("MHints len: %v\n", len(cs.MHints))
 
 	return int64(decoder.NumBytesRead()), nil
+}
+
+func encodeMHints(mhints map[int]*compiled.Hint) []byte {
+	mhintsBinary := make([]byte, 0)
+
+	mhintsBinary = append(mhintsBinary, int_to_byte(len(mhints))...)
+
+	mhintscheck := make(map[*compiled.Hint]int)
+
+	for k, v := range mhints {
+		mhintsBinary = append(mhintsBinary, int_to_byte(k)...)
+		if lastKey, ok := mhintscheck[v]; ok {
+			//do something here
+			mhintsBinary = append(mhintsBinary, int_to_byte(0)...)
+			mhintsBinary = append(mhintsBinary, int_to_byte(lastKey)...)
+			continue
+		} else {
+			mhintsBinary = append(mhintsBinary, int_to_byte(1)...)
+		}
+		mhintscheck[v] = k
+		//Serialize a hint
+		hintBinary := make([]byte, 0)
+		hintBinary = append(hintBinary, hintID_to_byte(v.ID)...)
+		//convert array of int to array of byte
+		hintBinary = append(hintBinary, int_to_byte(len(v.Wires))...)
+		for i := 0; i < len(v.Wires); i++ {
+			hintBinary = append(hintBinary, int_to_byte(v.Wires[i])...)
+		}
+		hintBinary = append(hintBinary, int_to_byte(len(v.Inputs))...)
+		for i := 0; i < len(v.Inputs); i++ {
+			switch vit := v.Inputs[i].(type) {
+			case big.Int:
+				hintBinary = append(hintBinary, int_to_byte(int(25446))...)
+				hintBinary = append(hintBinary, int_to_byte(len(vit.Bytes()))...)
+				hintBinary = append(hintBinary, vit.Bytes()...)
+			case *big.Int:
+				hintBinary = append(hintBinary, int_to_byte(int(25447))...)
+				hintBinary = append(hintBinary, int_to_byte(len(vit.Bytes()))...)
+				hintBinary = append(hintBinary, vit.Bytes()...)
+			case compiled.LinearExpression:
+				//linear expression = []Term = []Uint64
+				hintBinary = append(hintBinary, int_to_byte(int(25443))...)
+				hintBinary = append(hintBinary, int_to_byte(len(vit))...)
+				for j := 0; j < len(vit); j++ {
+					hintBinary = append(hintBinary, uint64_to_byte(uint64(vit[j]))...)
+				}
+			default:
+				fmt.Println(reflect.TypeOf(vit))
+				panic("unknown type")
+			}
+		}
+		mhintsBinary = append(mhintsBinary, hintBinary...)
+	}
+	return mhintsBinary
+}
+
+func decodeMHints(r io.Reader) (map[int]*compiled.Hint, error) {
+	t0 := time.Now()
+	defer func() {
+		fmt.Printf("Decoding MHints Took: %0.2f minutes\n", time.Now().Sub(t0).Minutes())
+	}()
+
+	var mHintLenBytes [8]byte
+	_, err := r.Read(mHintLenBytes[:])
+	if err != nil {
+		return nil, err
+	}
+	mHintLen := binary.LittleEndian.Uint64(mHintLenBytes[:])
+	mHintBytes, err := ioutils.Read(r, int(mHintLen))
+	if err != nil {
+		return nil, err
+	}
+
+	//start decode hint
+	hint := make(map[int]*compiled.Hint)
+	bytes_used := 0
+	lenHint, offset := byte_to_int(mHintBytes, bytes_used)
+	bytes_used += offset
+	for i := 0; i < lenHint; i++ {
+		k, offset := byte_to_int(mHintBytes, bytes_used)
+		bytes_used += offset
+		var v compiled.Hint
+
+		mode, offset := byte_to_int(mHintBytes, bytes_used)
+		bytes_used += offset
+		if mode == 0 {
+			lastKey, offset := byte_to_int(mHintBytes, bytes_used)
+			bytes_used += offset
+			hint[k] = hint[lastKey]
+			continue
+		} else if mode == 1 {
+		} else {
+			panic("mode error")
+		}
+
+		v.ID, offset = byte_to_hintID(mHintBytes, bytes_used)
+		bytes_used += offset
+
+		wireLen, offset := byte_to_int(mHintBytes, bytes_used)
+		bytes_used += offset
+		v.Wires = make([]int, wireLen)
+		for j := 0; j < wireLen; j++ {
+			v.Wires[j], offset = byte_to_int(mHintBytes, bytes_used)
+			bytes_used += offset
+		}
+		inputLen, offset := byte_to_int(mHintBytes, bytes_used)
+		bytes_used += offset
+		v.Inputs = make([]interface{}, inputLen)
+		for j := 0; j < inputLen; j++ {
+			typeTag, offset := byte_to_int(mHintBytes, bytes_used)
+			bytes_used += offset
+			switch typeTag {
+			case 25446:
+				//big.Int
+				val := new(big.Int)
+				bigIntLen, offset := byte_to_int(mHintBytes, bytes_used)
+				bytes_used += offset
+				bb := mHintBytes[bytes_used : bytes_used+bigIntLen]
+				bytes_used += bigIntLen
+				val.SetBytes(bb)
+				v.Inputs[j] = *val
+			case 25447:
+				//*big.Int
+				val := new(big.Int)
+				bigIntLen, offset := byte_to_int(mHintBytes, bytes_used)
+				bytes_used += offset
+				bb := mHintBytes[bytes_used : bytes_used+bigIntLen]
+				bytes_used += bigIntLen
+				val.SetBytes(bb)
+				v.Inputs[j] = val
+			case 25443:
+				//LinearExpression
+				linLen, offset := byte_to_int(mHintBytes, bytes_used)
+				bytes_used += offset
+				val := make([]compiled.Term, linLen)
+				for k := 0; k < linLen; k++ {
+					uint64v, offset := byte_to_uint64(mHintBytes, bytes_used)
+					bytes_used += offset
+					val[k] = compiled.Term(uint64v)
+				}
+				v.Inputs[j] = compiled.LinearExpression(val)
+			default:
+				panic("typeTag error")
+			}
+		}
+		hint[k] = &v
+	}
+	return hint, nil
 }
