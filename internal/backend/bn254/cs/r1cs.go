@@ -870,8 +870,7 @@ func decodeMHints(r io.Reader) (map[int]*compiled.Hint, error) {
 		return nil, err
 	}
 	mHintLen := binary.LittleEndian.Uint64(mHintLenBytes[:])
-	mHintBytes := make([]byte, mHintLen)
-	_, err = r.Read(mHintBytes)
+	mHintBytes, err := ioutils.Read(r, int(mHintLen))
 	if err != nil {
 		return nil, err
 	}
