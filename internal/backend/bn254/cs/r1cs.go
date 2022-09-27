@@ -502,20 +502,15 @@ func hintID_to_byte(x hint.ID) []byte {
 func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	//Naive array to binary
 	fmt.Println("Writing R1CS to file")
-	//MHints to binary, MHints is a map from int to *Hint
-	start := time.Now()
 
-	mhintsBinary := encodeMHints(cs.MHints)
-
-	_, err := w.Write(uint64_to_byte(uint64(len(mhintsBinary))))
+	err := encodeMHintsToWriter(w, cs.MHints)
 	if err != nil {
-		panic(err)
+		return 0, err
 	}
-	_, err = w.Write(mhintsBinary)
+	err = encodeConstraintsToWriter(w, cs.Constraints)
 	if err != nil {
-		panic(err)
+		return 0, err
 	}
-	fmt.Printf("Encoding MHints done, took %0.2f minutes\n", time.Since(start).Minutes())
 
 	_w := ioutils.WriterCounter{W: w} // wraps writer to count the bytes written
 	enc, err := cbor.CoreDetEncOptions().EncMode()
@@ -535,14 +530,14 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 		return _w.N, err
 	}
 	t1 := time.Now()
-	fmt.Printf("Encoding Schema Took: %0.2f minutes\n", t1.Sub(t0).Minutes())
+	fmt.Printf("Encoding Schema took: %0.2fs\n", t1.Sub(t0).Seconds())
 
 	err = encoder.Encode(cs.ConstraintSystem.NbInternalVariables)
 	if err != nil {
 		return _w.N, err
 	}
 	t2 := time.Now()
-	fmt.Printf("Encoding NbInternalVariables Took: %0.2f minutes\n", t2.Sub(t1).Minutes())
+	fmt.Printf("Encoding NbInternalVariables took: %0.2fs\n", t2.Sub(t1).Seconds())
 
 	err = encoder.Encode(cs.ConstraintSystem.NbPublicVariables)
 	if err != nil {
@@ -550,7 +545,7 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	t3 := time.Now()
-	fmt.Printf("Encoding NbPublicVariables Took: %0.2f minutes\n", t3.Sub(t2).Minutes())
+	fmt.Printf("Encoding NbPublicVariables took: %0.2fs\n", t3.Sub(t2).Seconds())
 
 	err = encoder.Encode(cs.ConstraintSystem.NbSecretVariables)
 	if err != nil {
@@ -558,7 +553,7 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	t4 := time.Now()
-	fmt.Printf("Encoding NbSecretVariables Took: %0.2f minutes\n", t4.Sub(t3).Minutes())
+	fmt.Printf("Encoding NbSecretVariables took: %0.2fs\n", t4.Sub(t3).Seconds())
 
 	err = encoder.Encode(cs.ConstraintSystem.Public)
 	if err != nil {
@@ -566,7 +561,7 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	t5 := time.Now()
-	fmt.Printf("Encoding Public Took: %0.2f minutes\n", t5.Sub(t4).Minutes())
+	fmt.Printf("Encoding Public took: %0.2fs\n", t5.Sub(t4).Seconds())
 
 	err = encoder.Encode(cs.ConstraintSystem.Secret)
 	if err != nil {
@@ -574,14 +569,14 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	t6 := time.Now()
-	fmt.Printf("Encoding Secret Took: %0.2f minutes\n", t6.Sub(t5).Minutes())
+	fmt.Printf("Encoding Secret took: %0.2fs\n", t6.Sub(t5).Seconds())
 
 	err = encoder.Encode(cs.ConstraintSystem.Logs)
 	if err != nil {
 		return _w.N, err
 	}
 	t7 := time.Now()
-	fmt.Printf("Encoding Logs Took: %0.2f minutes\n", t7.Sub(t6).Minutes())
+	fmt.Printf("Encoding Logs took: %0.2fs\n", t7.Sub(t6).Seconds())
 
 	err = encoder.Encode(cs.ConstraintSystem.DebugInfo)
 	if err != nil {
@@ -589,7 +584,7 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	t8 := time.Now()
-	fmt.Printf("Encoding DebugInfo Took: %0.2f minutes\n", t8.Sub(t7).Minutes())
+	fmt.Printf("Encoding DebugInfo took: %0.2fs\n", t8.Sub(t7).Seconds())
 
 	err = encoder.Encode(cs.ConstraintSystem.MDebug)
 	if err != nil {
@@ -597,34 +592,34 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	t9 := time.Now()
-	fmt.Printf("Encoding MDebug Took: %0.2f minutes\n", t9.Sub(t8).Minutes())
+	fmt.Printf("Encoding MDebug took: %0.2fs\n", t9.Sub(t8).Seconds())
 
 	err = encoder.Encode(cs.ConstraintSystem.Counters)
 	if err != nil {
 		return _w.N, err
 	}
 	t10 := time.Now()
-	fmt.Printf("Encoding Counters Took: %0.2f minutes\n", t10.Sub(t9).Minutes())
+	fmt.Printf("Encoding Counters took: %0.2fs\n", t10.Sub(t9).Seconds())
 
 	//err = encoder.Encode(cs.ConstraintSystem.MHints)
 	//if err != nil {
 	//	return _w.N, err
 	//}
-	//fmt.Printf("Encoding MHints Took: %0.2f minutes\n", t11.Sub(t10).Minutes())
+	//fmt.Printf("Encoding MHints took: %0.2fs\n", t11.Sub(t10).Seconds())
 	t11 := time.Now()
 	err = encoder.Encode(cs.ConstraintSystem.MHintsDependencies)
 	if err != nil {
 		return _w.N, err
 	}
 	t12 := time.Now()
-	fmt.Printf("Encoding MHintsDependencies Took: %0.2f minutes\n", t12.Sub(t11).Minutes())
+	fmt.Printf("Encoding MHintsDependencies took: %0.2fs\n", t12.Sub(t11).Seconds())
 
 	err = encoder.Encode(cs.ConstraintSystem.Levels)
 	if err != nil {
 		return _w.N, err
 	}
 	t13 := time.Now()
-	fmt.Printf("Encoding Levels Took: %0.2f minutes\n", t13.Sub(t12).Minutes())
+	fmt.Printf("Encoding Levels took: %0.2fs\n", t13.Sub(t12).Seconds())
 
 	err = encoder.Encode(cs.ConstraintSystem.CurveID)
 	if err != nil {
@@ -632,20 +627,20 @@ func (cs *R1CS) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	t14 := time.Now()
-	fmt.Printf("Encoding CurveID Took: %0.2f minutes\n", t14.Sub(t13).Minutes())
+	fmt.Printf("Encoding CurveID took: %0.2fs\n", t14.Sub(t13).Seconds())
 
-	err = encoder.Encode(cs.Constraints)
-	if err != nil {
-		return _w.N, err
-	}
+	//err = encoder.Encode(cs.Constraints)
+	//if err != nil {
+	//	return _w.N, err
+	//}
 
 	t15 := time.Now()
-	fmt.Printf("Encoding Constraints Took: %0.2f minutes\n", t15.Sub(t14).Minutes())
+	//fmt.Printf("Encoding Constraints took: %0.2fs\n", t15.Sub(t14).Seconds())
 
 	err = encoder.Encode(cs.Coefficients)
 
 	t16 := time.Now()
-	fmt.Printf("Encoding Coefficients Took: %0.2f minutes\n", t16.Sub(t16).Minutes())
+	fmt.Printf("Encoding Coefficients took: %0.2fs\n", t16.Sub(t15).Seconds())
 
 	return _w.N, err
 }
@@ -678,13 +673,17 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 		return 0, err
 	}
 	//start := time.Now()
-	//fmt.Printf("Decoder Created Took: %0.2f minutes\n", time.Now().Sub(start).Minutes())
+	//fmt.Printf("Decoder Created took: %0.2fs\n", time.Now().Sub(start).Seconds())
 	//if err := decoder.Decode(&cs); err != nil {
 	//	return int64(decoder.NumBytesRead()), err
 	//}
 
 	cs.ConstraintSystem.Schema = &schema.Schema{}
-	cs.ConstraintSystem.MHints, err = decodeMHints(r)
+	cs.ConstraintSystem.MHints, err = decodeMHintsFromReader(r)
+	if err != nil {
+		return 0, err
+	}
+	cs.Constraints, err = decodeConstraintsFromReader(r)
 	if err != nil {
 		return 0, err
 	}
@@ -696,112 +695,131 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t1 := time.Now()
-	fmt.Printf("Decoding Schema Took: %0.2f minutes\n", t1.Sub(t0).Minutes())
+	fmt.Printf("Decoding Schema took: %0.2fs\n", t1.Sub(t0).Seconds())
 
 	err = decoder.Decode(&cs.ConstraintSystem.NbInternalVariables)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t2 := time.Now()
-	fmt.Printf("Decoding NbInternalVariables Took: %0.2f minutes\n", t2.Sub(t1).Minutes())
+	fmt.Printf("Decoding NbInternalVariables took: %0.2fs\n", t2.Sub(t1).Seconds())
 
 	err = decoder.Decode(&cs.ConstraintSystem.NbPublicVariables)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t3 := time.Now()
-	fmt.Printf("Decoding NbPublicVariables Took: %0.2f minutes\n", t3.Sub(t2).Minutes())
+	fmt.Printf("Decoding NbPublicVariables took: %0.2fs\n", t3.Sub(t2).Seconds())
 
 	err = decoder.Decode(&cs.ConstraintSystem.NbSecretVariables)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t4 := time.Now()
-	fmt.Printf("Decoding NbSecretVariables Took: %0.2f minutes\n", t4.Sub(t3).Minutes())
+	fmt.Printf("Decoding NbSecretVariables took: %0.2fs\n", t4.Sub(t3).Seconds())
 
 	err = decoder.Decode(&cs.ConstraintSystem.Public)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t5 := time.Now()
-	fmt.Printf("Decoding Public Took: %0.2f minutes\n", t5.Sub(t4).Minutes())
+	fmt.Printf("Decoding Public took: %0.2fs\n", t5.Sub(t4).Seconds())
 
 	err = decoder.Decode(&cs.ConstraintSystem.Secret)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t6 := time.Now()
-	fmt.Printf("Decoding Secret Took: %0.2f minutes\n", t6.Sub(t5).Minutes())
+	fmt.Printf("Decoding Secret took: %0.2fs\n", t6.Sub(t5).Seconds())
 
 	err = decoder.Decode(&cs.ConstraintSystem.Logs)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t7 := time.Now()
-	fmt.Printf("Decoding Logs Took: %0.2f minutes\n", t7.Sub(t6).Minutes())
+	fmt.Printf("Decoding Logs took: %0.2fs\n", t7.Sub(t6).Seconds())
 
 	err = decoder.Decode(&cs.ConstraintSystem.DebugInfo)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t8 := time.Now()
-	fmt.Printf("Decoding DebugInfo Took: %0.2f minutes\n", t8.Sub(t7).Minutes())
+	fmt.Printf("Decoding DebugInfo took: %0.2fs\n", t8.Sub(t7).Seconds())
 
 	err = decoder.Decode(&cs.ConstraintSystem.MDebug)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t9 := time.Now()
-	fmt.Printf("Decoding MDebug Took: %0.2f minutes\n", t9.Sub(t8).Minutes())
+	fmt.Printf("Decoding MDebug took: %0.2fs\n", t9.Sub(t8).Seconds())
 
 	err = decoder.Decode(&cs.ConstraintSystem.Counters)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t10 := time.Now()
-	fmt.Printf("Decoding Counters Took: %0.2f minutes\n", t10.Sub(t9).Minutes())
+	fmt.Printf("Decoding Counters took: %0.2fs\n", t10.Sub(t9).Seconds())
 
 	t11 := time.Now()
-	//fmt.Printf("Decoding MHints Took: %0.2f minutes\n", t11.Sub(t10).Minutes())
+	//fmt.Printf("Decoding MHints took: %0.2fs\n", t11.Sub(t10).Seconds())
 	err = decoder.Decode(&cs.ConstraintSystem.MHintsDependencies)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t12 := time.Now()
-	fmt.Printf("Decoding MHintsDependencies Took: %0.2f minutes\n", t12.Sub(t11).Minutes())
+	fmt.Printf("Decoding MHintsDependencies took: %0.2fs\n", t12.Sub(t11).Seconds())
 
 	err = decoder.Decode(&cs.ConstraintSystem.Levels)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t13 := time.Now()
-	fmt.Printf("Decoding Levels Took: %0.2f minutes\n", t13.Sub(t12).Minutes())
+	fmt.Printf("Decoding Levels took: %0.2fs\n", t13.Sub(t12).Seconds())
 
 	err = decoder.Decode(&cs.ConstraintSystem.CurveID)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t14 := time.Now()
-	fmt.Printf("Decoding CurveID Took: %0.2f minutes\n", t14.Sub(t13).Minutes())
+	fmt.Printf("Decoding CurveID took: %0.2fs\n", t14.Sub(t13).Seconds())
 
-	err = decoder.Decode(&cs.Constraints)
-	if err != nil {
-		return int64(decoder.NumBytesRead()), err
-	}
+	//err = decoder.Decode(&cs.Constraints)
+	//if err != nil {
+	//	return int64(decoder.NumBytesRead()), err
+	//}
 
 	t15 := time.Now()
-	fmt.Printf("Decoding Constraints Took: %0.2f minutes\n", t15.Sub(t14).Minutes())
+	//fmt.Printf("Decoding Constraints took: %0.2fs\n", t15.Sub(t14).Seconds())
 
 	err = decoder.Decode(&cs.Coefficients)
 	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t16 := time.Now()
-	fmt.Printf("Decoding Coefficients Took: %0.2f minutes\n", t16.Sub(t15).Minutes())
+	fmt.Printf("Decoding Coefficients took: %0.2fs\n", t16.Sub(t15).Seconds())
 
 	fmt.Printf("MHints len: %v\n", len(cs.MHints))
 
 	return int64(decoder.NumBytesRead()), nil
+}
+
+func encodeMHintsToWriter(w io.Writer, mhints map[int]*compiled.Hint) error {
+	start := time.Now()
+	defer func() {
+		fmt.Printf("Encoding MHints done, took %0.2fs\n", time.Since(start).Seconds())
+	}()
+
+	mhintsBinary := encodeMHints(mhints)
+
+	_, err := w.Write(uint64_to_byte(uint64(len(mhintsBinary))))
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(mhintsBinary)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func encodeMHints(mhints map[int]*compiled.Hint) []byte {
@@ -858,10 +876,10 @@ func encodeMHints(mhints map[int]*compiled.Hint) []byte {
 	return mhintsBinary
 }
 
-func decodeMHints(r io.Reader) (map[int]*compiled.Hint, error) {
+func decodeMHintsFromReader(r io.Reader) (map[int]*compiled.Hint, error) {
 	t0 := time.Now()
 	defer func() {
-		fmt.Printf("Decoding MHints Took: %0.2f minutes\n", time.Now().Sub(t0).Minutes())
+		fmt.Printf("Decoding MHints took: %0.2fs\n", time.Now().Sub(t0).Seconds())
 	}()
 
 	var mHintLenBytes [8]byte
@@ -874,6 +892,10 @@ func decodeMHints(r io.Reader) (map[int]*compiled.Hint, error) {
 	if err != nil {
 		return nil, err
 	}
+	return decodeMHints(mHintBytes)
+}
+
+func decodeMHints(mHintBytes []byte) (map[int]*compiled.Hint, error) {
 
 	//start decode hint
 	hint := make(map[int]*compiled.Hint)
@@ -950,4 +972,92 @@ func decodeMHints(r io.Reader) (map[int]*compiled.Hint, error) {
 		hint[k] = &v
 	}
 	return hint, nil
+}
+
+func encodeConstraintsToWriter(w io.Writer, constraints []compiled.R1C) error {
+	start := time.Now()
+	defer func() {
+		fmt.Printf("Encoding Constraints done, took %0.2fs\n", time.Since(start).Seconds())
+	}()
+	mConstraintsBinary := encodeConstraints(constraints)
+	_, err := w.Write(uint64_to_byte(uint64(len(mConstraintsBinary))))
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(mConstraintsBinary)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func encodeConstraints(constraints []compiled.R1C) []byte {
+	R1CsBytes := uint64_to_byte(uint64(len(constraints)))
+	for _, r1c := range constraints {
+		R1CsBytes = append(R1CsBytes, encodeLinearExpression(r1c.L)...)
+		R1CsBytes = append(R1CsBytes, encodeLinearExpression(r1c.R)...)
+		R1CsBytes = append(R1CsBytes, encodeLinearExpression(r1c.O)...)
+	}
+	return R1CsBytes
+}
+
+func encodeLinearExpression(l compiled.LinearExpression) []byte {
+	var retBytes []byte
+	retBytes = append(retBytes, uint64_to_byte(uint64(len(l)))...)
+	for _, term := range l {
+		retBytes = append(retBytes, uint64_to_byte(uint64(term))...)
+	}
+	return retBytes
+}
+
+func decodeConstraintsFromReader(r io.Reader) ([]compiled.R1C, error) {
+	t0 := time.Now()
+	defer func() {
+		fmt.Printf("Decoding Constraints took: %0.2fs\n", time.Now().Sub(t0).Seconds())
+	}()
+
+	var constraintLenBytes [8]byte
+	_, err := r.Read(constraintLenBytes[:])
+	if err != nil {
+		return nil, err
+	}
+	constraintLen := binary.LittleEndian.Uint64(constraintLenBytes[:])
+	constraintBytes, err := ioutils.Read(r, int(constraintLen))
+	if err != nil {
+		return nil, err
+	}
+	return decodeConstraints(constraintBytes), nil
+}
+
+func decodeConstraints(bytes []byte) []compiled.R1C {
+	n, offset := byte_to_int(bytes, 0)
+	r1c := make([]compiled.R1C, n)
+	for i := 0; i < n; i++ {
+		L, usedBytes := decodeLinearExpression(bytes[offset:])
+		offset += usedBytes
+		R, usedBytes := decodeLinearExpression(bytes[offset:])
+		offset += usedBytes
+		O, usedBytes := decodeLinearExpression(bytes[offset:])
+		offset += usedBytes
+
+		r1c[i] = compiled.R1C{
+			L: L,
+			R: R,
+			O: O,
+		}
+	}
+	return r1c
+}
+
+func decodeLinearExpression(bytes []byte) (compiled.LinearExpression, int) {
+	offset := 0
+	nTerm, usedN := byte_to_int(bytes, offset)
+	offset += usedN
+	le := make([]compiled.Term, nTerm)
+	for j := 0; j < nTerm; j++ {
+		term, usedN := byte_to_int(bytes, offset)
+		le[j] = compiled.Term(term)
+		offset += usedN
+	}
+	return le, offset
 }
