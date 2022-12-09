@@ -90,6 +90,8 @@ type API interface {
 	// IsZero returns 1 if a is zero, 0 otherwise
 	IsZero(i1 Variable) Variable
 
+	CheckZero(i1 Variable) Variable
+
 	// Cmp returns 1 if i1>i2, 0 if i1=i2, -1 if i1<i2
 	Cmp(i1, i2 Variable) Variable
 

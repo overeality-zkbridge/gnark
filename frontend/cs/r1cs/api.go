@@ -475,6 +475,30 @@ func (system *r1cs) IsZero(i1 frontend.Variable) frontend.Variable {
 	return m
 }
 
+// IsZero returns 1 if i1 is zero, 0 otherwise
+func (system *r1cs) CheckZero(i1 frontend.Variable) frontend.Variable {
+	vars, _ := system.toVariables(i1)
+	a := vars[0]
+	if c, ok := system.ConstantValue(a); ok {
+		if c.IsUint64() && c.Uint64() == 0 {
+			return system.toVariable(1)
+		}
+		return system.toVariable(0)
+	}
+
+	debug := system.AddDebugInfo("CheckZero", a)
+
+	res, err := system.NewHint(hint.CheckZero, 1, a)
+	if err != nil {
+		// the function errs only if the number of inputs is invalid.
+		panic(err)
+	}
+	m := res[0]
+	system.addConstraint(newR1C(a, m, a), debug)
+	system.AssertIsBoolean(m)
+	return m
+}
+
 // Cmp returns 1 if i1>i2, 0 if i1=i2, -1 if i1<i2
 func (system *r1cs) Cmp(i1, i2 frontend.Variable) frontend.Variable {
 

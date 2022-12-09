@@ -268,6 +268,17 @@ func (e *engine) IsZero(i1 frontend.Variable) frontend.Variable {
 	return (0)
 }
 
+// IsZero returns 1 if a is zero, 0 otherwise
+func (e *engine) CheckZero(i1 frontend.Variable) frontend.Variable {
+	b1 := e.toBigInt(i1)
+
+	if b1.IsUint64() && b1.Uint64() == 0 {
+		return 0
+	}
+
+	return (1)
+}
+
 // Cmp returns 1 if i1>i2, 0 if i1==i2, -1 if i1<i2
 func (e *engine) Cmp(i1, i2 frontend.Variable) frontend.Variable {
 	b1 := e.toBigInt(i1)

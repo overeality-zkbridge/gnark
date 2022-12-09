@@ -392,6 +392,10 @@ func (system *scs) IsZero(i1 frontend.Variable) frontend.Variable {
 	return m
 }
 
+func (system *scs) CheckZero(a frontend.Variable) frontend.Variable {
+	return system.Sub(1, system.IsZero(a))
+}
+
 // Cmp returns 1 if i1>i2, 0 if i1=i2, -1 if i1<i2
 func (system *scs) Cmp(i1, i2 frontend.Variable) frontend.Variable {
 
