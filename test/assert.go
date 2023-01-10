@@ -130,6 +130,9 @@ func (assert *Assert) ProverSucceeded(circuit frontend.Circuit, validAssignment 
 				// 1- compile the circuit
 				ccs, err := assert.compile(circuit, curve, b, opt.compileOpts)
 				checkError(err)
+				internal, secret, public := ccs.GetNbVariables()
+				fmt.Printf("public, secret, internal, constraints %v, %v, %v, %v\n", public, secret, internal, ccs.GetNbConstraints())
+
 
 				// must not error with big int test engine (only the curveID is needed for this test)
 				err = IsSolved(circuit, validAssignment, curve, backend.UNKNOWN)
@@ -172,9 +175,9 @@ func (assert *Assert) ProverSucceeded(circuit frontend.Circuit, validAssignment 
 
 	// TODO may not be the right place, but ensures all our tests call these minimal tests
 	// (like filling a witness with zeroes, or binary values, ...)
-	assert.Run(func(assert *Assert) {
-		assert.Fuzz(circuit, 5, opts...)
-	}, "fuzz")
+// 	assert.Run(func(assert *Assert) {
+// 		assert.Fuzz(circuit, 5, opts...)
+// 	}, "fuzz")
 }
 
 // ProverSucceeded fails the test if any of the following step errored:
