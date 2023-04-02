@@ -796,7 +796,7 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 		return int64(decoder.NumBytesRead()), err
 	}
 	t16 := time.Now()
-	fmt.Printf("Decoding Coefficients took: %0.2fs\n", t16.Sub(t15).Seconds())
+	fmt.Printf("Decoding Coefficients took: %0.2fs, length is %d\n", t16.Sub(t15).Seconds(), len(cs.Coefficients))
 
 	fmt.Printf("MHints len: %v\n", len(cs.MHints))
 
@@ -1012,8 +1012,9 @@ func encodeLinearExpression(l compiled.LinearExpression) []byte {
 
 func decodeConstraintsFromReader(r io.Reader) ([]compiled.R1C, error) {
 	t0 := time.Now()
+	length := 0
 	defer func() {
-		fmt.Printf("Decoding Constraints took: %0.2fs\n", time.Now().Sub(t0).Seconds())
+		fmt.Printf("Decoding Constraints took: %0.2fs, length %d\n", time.Now().Sub(t0).Seconds(), length)
 	}()
 
 	var constraintLenBytes [8]byte
@@ -1026,7 +1027,15 @@ func decodeConstraintsFromReader(r io.Reader) ([]compiled.R1C, error) {
 	if err != nil {
 		return nil, err
 	}
-	return decodeConstraints(constraintBytes), nil
+	result := decodeConstraints(constraintBytes)
+
+	for _, r1c := range result {
+		length += len(r1c.L)
+		length += len(r1c.R)
+		length += len(r1c.O)
+	}
+
+	return result, nil
 }
 
 func decodeConstraints(bytes []byte) []compiled.R1C {
