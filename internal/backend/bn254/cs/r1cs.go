@@ -178,7 +178,6 @@ func (cs *R1CS) parallelSolve(a, b, c []fr.Element, solution *solution) error {
 		close(chTasks)
 		close(chError)
 	}()
-
 	// for each level, we push the tasks
 	for _, level := range cs.Levels {
 
