@@ -187,6 +187,89 @@ func structTag(baseNameTag string, visibility Visibility, omitEmpty bool) reflec
 	return reflect.StructTag(fmt.Sprintf("gnark:\"%s,%s\" json:\"%s%s\"", baseNameTag, visibility.String(), baseNameTag, sOmitEmpty))
 }
 
+func parseStruct(r []Field, tValue reflect.Value, target reflect.Type, parentFullName, parentGoName, parentTagName string, parentVisibility Visibility, handler LeafHandler, nbPublic, nbSecret *int) ([]Field, error) {
+
+	var subFields []Field
+
+	// get visible fields
+	fields := reflect.VisibleFields(tValue.Type())
+	// fmt.Println(fields)
+	for _, f := range fields {
+		// check if the gnark tag is set
+		tag, ok := f.Tag.Lookup(string(tagKey))
+		if ok && tag == string(optOmit) {
+			continue // skipping "-"
+		}
+
+		// default visibility is Unset
+		visibility := Unset
+
+		// variable name is field name, unless overriden by gnark tag value
+		name := f.Name
+
+		var nameTag string
+
+		if ok && tag != "" {
+			// gnark tag is set
+			var opts tagOptions
+			nameTag, opts = parseTag(tag)
+			if !isValidTag(nameTag) {
+				nameTag = ""
+			}
+			opts = tagOptions(strings.TrimSpace(string(opts)))
+			if opts == "" || opts.contains(string(optSecret)) {
+				visibility = Secret
+			} else if opts.contains(string(optPublic)) {
+				visibility = Public
+			} else {
+				return r, fmt.Errorf("invalid gnark struct tag option on %s. must be \"public\", \"secret\" or \"-\"", getFullName(parentGoName, name, nameTag))
+			}
+		}
+
+		if ((parentVisibility == Public) && (visibility == Secret)) ||
+			((parentVisibility == Secret) && (visibility == Public)) {
+			// TODO @gbotrel maybe we should just force it to take the parent value.
+			return r, fmt.Errorf("conflicting visibility. %s (%s) has a parent with different visibility attribute", getFullName(parentGoName, name, nameTag), visibility.String())
+		}
+
+		// inherit parent visibility
+		if visibility == Unset {
+			visibility = parentVisibility
+		}
+
+		fValue := tValue.FieldByIndex(f.Index)
+		if fValue.CanAddr() && fValue.Addr().CanInterface() {
+			value := fValue.Addr().Interface()
+			var err error
+			subFields, err = parse(subFields, value, target, getFullName(parentFullName, name, nameTag), name, nameTag, visibility, handler, nbPublic, nbSecret)
+			if err != nil {
+				return r, err
+			}
+		}
+	}
+
+	if parentGoName == "" {
+		// root
+		return subFields, nil
+	}
+	// we just add it to our current fields
+	// if parentVisibility == Unset {
+	// 	parentVisibility = Secret // default visibility to Secret
+	// }
+	if len(subFields) == 0 {
+		// nothing to add in the schema
+		return r, nil
+	}
+	return append(r, Field{
+		Name:       parentGoName,
+		NameTag:    parentTagName,
+		Type:       Struct,
+		SubFields:  subFields,
+		Visibility: parentVisibility, // == Secret,
+	}), nil
+
+}
+
 // parentFullName: the name of parent with its ancestors separated by "_"
 // parentGoName: the name of parent (Go struct definition)
 // parentTagName: may be empty, set if a struct tag with name is set
@@ -226,85 +309,7 @@ func parse(r []Field, input interface{}, target reflect.Type, parentFullName, pa
 
 	// struct
 	if tValue.Kind() == reflect.Struct {
-		var subFields []Field
-
-		// get visible fields
-		fields := reflect.VisibleFields(tValue.Type())
-
-		for _, f := range fields {
-			// check if the gnark tag is set
-			tag, ok := f.Tag.Lookup(string(tagKey))
-			if ok && tag == string(optOmit) {
-				continue // skipping "-"
-			}
-
-			// default visibility is Unset
-			visibility := Unset
-
-			// variable name is field name, unless overriden by gnark tag value
-			name := f.Name
-			var nameTag string
-
-			if ok && tag != "" {
-				// gnark tag is set
-				var opts tagOptions
-				nameTag, opts = parseTag(tag)
-				if !isValidTag(nameTag) {
-					nameTag = ""
-				}
-				opts = tagOptions(strings.TrimSpace(string(opts)))
-				if opts == "" || opts.contains(string(optSecret)) {
-					visibility = Secret
-				} else if opts.contains(string(optPublic)) {
-					visibility = Public
-				} else {
-					return r, fmt.Errorf("invalid gnark struct tag option on %s. must be \"public\", \"secret\" or \"-\"", getFullName(parentGoName, name, nameTag))
-				}
-			}
-
-			if ((parentVisibility == Public) && (visibility == Secret)) ||
-				((parentVisibility == Secret) && (visibility == Public)) {
-				// TODO @gbotrel maybe we should just force it to take the parent value.
-				return r, fmt.Errorf("conflicting visibility. %s (%s) has a parent with different visibility attribute", getFullName(parentGoName, name, nameTag), visibility.String())
-			}
-
-			// inherit parent visibility
-			if visibility == Unset {
-				visibility = parentVisibility
-			}
-
-			fValue := tValue.FieldByIndex(f.Index)
-
-			if fValue.CanAddr() && fValue.Addr().CanInterface() {
-				value := fValue.Addr().Interface()
-				var err error
-				subFields, err = parse(subFields, value, target, getFullName(parentFullName, name, nameTag), name, nameTag, visibility, handler, nbPublic, nbSecret)
-				if err != nil {
-					return r, err
-				}
-			}
-		}
-
-		if parentGoName == "" {
-			// root
-			return subFields, nil
-		}
-		// we just add it to our current fields
-		// if parentVisibility == Unset {
-		// 	parentVisibility = Secret // default visibility to Secret
-		// }
-		if len(subFields) == 0 {
-			// nothing to add in the schema
-			return r, nil
-		}
-		return append(r, Field{
-			Name:       parentGoName,
-			NameTag:    parentTagName,
-			Type:       Struct,
-			SubFields:  subFields,
-			Visibility: parentVisibility, // == Secret,
-		}), nil
-
+		parseStruct(r, tValue, target, parentFullName, parentGoName, parentTagName, parentVisibility, handler, nbPublic, nbSecret)
 	}
 
 	if tValue.Kind() == reflect.Slice || tValue.Kind() == reflect.Array {
@@ -346,8 +351,22 @@ func parse(r []Field, input interface{}, target reflect.Type, parentFullName, pa
 		var subFields []Field
 		var err error
 		for j := 0; j < tValue.Len(); j++ {
+			// fmt.Println("enter 1")
 			val := tValue.Index(j)
-			if val.CanAddr() && val.Addr().CanInterface() {
+			for val.Kind() == reflect.Ptr || val.Kind() == reflect.Interface {
+				val = val.Elem()
+			}
+			// fmt.Println(val.Kind())
+			if val.Kind() == reflect.Struct {
+				// fmt.Println("enter 2 ")
+				// we have a subcircuit
+				fqn := getFullName(parentFullName, strconv.Itoa(j), "")
+				subFields, err = parseStruct(subFields, val, target, fqn, fqn, parentTagName, parentVisibility, handler, nbPublic, nbSecret)
+				if err != nil {
+					return nil, err
+				}
+				// fmt.Println(subFields)
+			} else if val.CanAddr() && val.Addr().CanInterface() {
 				fqn := getFullName(parentFullName, strconv.Itoa(j), "")
 				subFields, err = parse(subFields, val.Addr().Interface(), target, fqn, fqn, parentTagName, parentVisibility, handler, nbPublic, nbSecret)
 				if err != nil {
