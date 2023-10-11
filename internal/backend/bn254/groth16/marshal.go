@@ -787,13 +787,13 @@ func readG2AffineArrayParallel(buf []byte, offset *int, maxConcurrency int) []cu
 		channel := make(chan bool, maxConcurrency)
 		chunkSize := length / maxConcurrency
 		for i := 0; i < maxConcurrency; i++ {
-			startIdxOffset := *offset + chunkSize * i
-			endIdxOffset := *offset + chunkSize * (i + 1)
+			startIdxOffset := chunkSize * i
+			endIdxOffset := chunkSize * (i + 1)
 			if i == maxConcurrency - 1 {
-				endIdxOffset = *offset + length
+				endIdxOffset = length
 			}
 			go func(startIdxOffset int, endIdxOffset int) {
-				ByteOffset := startIdxOffset * 128
+				ByteOffset := *offset + startIdxOffset * 128
 				for i := startIdxOffset; i < endIdxOffset; i++ {
 					result[i] = byte_to_G2Affine(buf[ByteOffset : ByteOffset+128])
 					ByteOffset += 128
@@ -824,13 +824,13 @@ func readFrElementArrayParallel(buf []byte, offset *int, maxConcurrency int) []f
 		channel := make(chan bool, maxConcurrency)
 		chunkSize := length / maxConcurrency
 		for i := 0; i < maxConcurrency; i++ {
-			startIdxOffset := *offset + chunkSize * i
-			endIdxOffset := *offset + chunkSize * (i + 1)
+			startIdxOffset := chunkSize * i
+			endIdxOffset := chunkSize * (i + 1)
 			if i == maxConcurrency - 1 {
-				endIdxOffset = *offset + length
+				endIdxOffset = length
 			}
 			go func(startIdxOffset int, endIdxOffset int) {
-				ByteOffset := startIdxOffset * 32
+				ByteOffset := *offset + startIdxOffset * 32
 				for i := startIdxOffset; i < endIdxOffset; i++ {
 					result[i] = byte_to_frElement(buf[ByteOffset : ByteOffset+32])
 					ByteOffset += 32
@@ -881,13 +881,13 @@ func readG1AffineArrayParallel(buf []byte, offset *int, maxConcurrency int) []cu
 		channel := make(chan bool, maxConcurrency)
 		chunkSize := length / maxConcurrency
 		for i := 0; i < maxConcurrency; i++ {
-			startIdxOffset := *offset + chunkSize * i
-			endIdxOffset := *offset + chunkSize * (i + 1)
+			startIdxOffset := chunkSize * i
+			endIdxOffset := chunkSize * (i + 1)
 			if i == maxConcurrency - 1 {
-				endIdxOffset = *offset + length
+				endIdxOffset = length
 			}
 			go func(startIdxOffset int, endIdxOffset int) {
-				ByteOffset := startIdxOffset * 64
+				ByteOffset := *offset + startIdxOffset * 64
 				for i := startIdxOffset; i < endIdxOffset; i++ {
 					result[i] = byte_to_G1Affine(buf[ByteOffset : ByteOffset+64])
 					ByteOffset += 64
