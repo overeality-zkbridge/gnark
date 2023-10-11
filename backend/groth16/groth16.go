@@ -206,6 +206,10 @@ func Prove(r1cs frontend.CompiledConstraintSystem, pk ProvingKey, fullWitness *w
 	}
 }
 
+func ReadFromBytes(pk ProvingKey, buf []byte, maxConcurrency int) (int64, error) {
+	return groth16_bn254.ReadFromBytes(pk.(*groth16_bn254.ProvingKey), buf, maxConcurrency)
+}
+
 // Setup runs groth16.Setup with provided R1CS and outputs a key pair associated with the circuit.
 //
 // Note that careful consideration must be given to this step in production environment.
