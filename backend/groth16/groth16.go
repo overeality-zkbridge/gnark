@@ -14,7 +14,7 @@
 
 // Package groth16 implements Groth16 Zero Knowledge Proof system  (aka zkSNARK).
 //
-// See also
+// # See also
 //
 // https://eprint.iacr.org/2016/260.pdf
 package groth16
@@ -153,9 +153,10 @@ func Verify(proof Proof, vk VerifyingKey, publicWitness *witness.Witness) error 
 // Prove runs the groth16.Prove algorithm.
 //
 // if the force flag is set:
-// 	will executes all the prover computations, even if the witness is invalid
-//  will produce an invalid proof
-//	internally, the solution vector to the R1CS will be filled with random values which may impact benchmarking
+//
+//		will executes all the prover computations, even if the witness is invalid
+//	 will produce an invalid proof
+//		internally, the solution vector to the R1CS will be filled with random values which may impact benchmarking
 func Prove(r1cs frontend.CompiledConstraintSystem, pk ProvingKey, fullWitness *witness.Witness, opts ...backend.ProverOption) (Proof, error) {
 
 	// apply options
@@ -208,6 +209,13 @@ func Prove(r1cs frontend.CompiledConstraintSystem, pk ProvingKey, fullWitness *w
 
 func ReadFromBytes(pk ProvingKey, buf []byte, maxConcurrency int) (int64, error) {
 	return groth16_bn254.ReadFromBytes(pk.(*groth16_bn254.ProvingKey), buf, maxConcurrency)
+}
+
+type CircuitOffsets interface {
+}
+
+func ReadCircuitFromBytes(r1cs frontend.CompiledConstraintSystem, buf []byte, maxConcurrency int, releaseFlag bool, offsetFile string) (int64, error) {
+	return backend_bn254.ReadCircuitFromBytes(r1cs.(*backend_bn254.R1CS), buf, maxConcurrency, releaseFlag, offsetFile)
 }
 
 // Setup runs groth16.Setup with provided R1CS and outputs a key pair associated with the circuit.
