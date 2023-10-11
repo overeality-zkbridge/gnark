@@ -923,7 +923,7 @@ func ReadBoolArrayParallel(buf []byte, offset *int, maxConcurrency int) []bool {
 	return result
 }
 
-func (pk *ProvingKey) readFromBytes(buf []byte, maxConcurrency int) (int64, error) {
+func ReadFromBytes(pk *ProvingKey, buf []byte, maxConcurrency int) (int64, error) {
 
 	fmt.Println("Reading from Bytes proving key")
 	pkDomainCardinalityBytes := buf[0 : 8]
