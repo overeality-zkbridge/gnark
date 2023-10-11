@@ -814,6 +814,7 @@ func readFrElementArrayParallel(buf []byte, offset *int, maxConcurrency int) []f
 	var result []fr.Element
 	length := byte_to_int(buf[*offset : *offset+8])
 	result = make([]fr.Element, length)
+	*offset += 8
 
 	if length < maxConcurrency * 128 {
 		for i := 0; i < length; i++ {
