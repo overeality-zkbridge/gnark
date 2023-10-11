@@ -504,7 +504,7 @@ func (pk *ProvingKey) ReadFrom(r io.Reader) (int64, error) {
 }
 
 func (pk *ProvingKey) ReadFromBytes(buf []byte, maxConcurrency int) (int64, error) {
-	return pk.readFromBytes(buf, maxConcurrency)
+	return ReadFromBytes(pk, buf, maxConcurrency)
 }
 
 // UnsafeReadFrom behaves like ReadFrom excepts it doesn't check if the decoded points are on the curve
