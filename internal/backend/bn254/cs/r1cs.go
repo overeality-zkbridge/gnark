@@ -46,8 +46,9 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 
-	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"encoding/json"
+
+	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 
 	bn254witness "github.com/consensys/gnark/internal/backend/bn254/witness"
 )
@@ -692,23 +693,30 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 	var offsets CircuitOffsets
 	if err != nil || len(offsetFileHandle) == 0 {
 		offsetExists = false
+		fmt.Println("No offset file found, starting from scratch", err, len(offsetFileHandle), offsetFilePath)
 	} else {
 		err = json.Unmarshal(offsetFileHandle, &offsets)
 		if err != nil {
 			offsetExists = false
+			fmt.Println("Offset file found, but could not be parsed, starting from scratch")
 		}
 	}
 
 	if offsetExists {
+		var wg sync.WaitGroup
+		if releaseFlag {
+			wg.Add(14) 
+		} else {
+			wg.Add(16)
+		}
 		// Parallel decoding
-		channels := make(chan bool)
 		go func() { // 1
 			offset := int(offsets.MHints)
 			cs.ConstraintSystem.MHints, err = decodeMHintsFromReaderParallel(buf, &offset, maxConcurrency)
 			if err != nil {
 				panic(err)
 			}
-			channels <- true
+			wg.Done()
 		}()
 		
 		go func() { // 2
@@ -717,7 +725,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 			if err != nil {
 				panic(err)
 			}
-			channels <- true
+			wg.Done()
 		}()
 		
 		go func() { // 3
@@ -739,7 +747,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 			}
 			t1 := time.Now()
 			fmt.Printf("Decoding Schema took: %0.2fs\n", t1.Sub(t0).Seconds())
-			channels <- true
+			wg.Done()
 		}()
 		
 		go func() { // 4
@@ -760,7 +768,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 			}
 			t2 := time.Now()
 			fmt.Printf("Decoding NbInternalVariables took: %0.2fs\n", t2.Sub(t1).Seconds())
-			channels <- true
+			wg.Done()
 		}()
 		
 		go func() { // 5
@@ -781,7 +789,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 			}
 			t3 := time.Now()
 			fmt.Printf("Decoding NbPublicVariables took: %0.2fs\n", t3.Sub(t2).Seconds())
-			channels <- true
+			wg.Done()
 		}()
 
 		go func() { // 6
@@ -802,7 +810,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 			}
 			t4 := time.Now()
 			fmt.Printf("Decoding NbSecretVariables took: %0.2fs\n", t4.Sub(t3).Seconds())
-			channels <- true
+			wg.Done()
 		}()
 		
 		go func() { // 7
@@ -823,7 +831,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 			}
 			t5 := time.Now()
 			fmt.Printf("Decoding Public took: %0.2fs\n", t5.Sub(t4).Seconds())
-			channels <- true
+			wg.Done()
 		}()
 
 		go func() { // 8
@@ -844,7 +852,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 			}
 			t6 := time.Now()
 			fmt.Printf("Decoding Secret took: %0.2fs\n", t6.Sub(t5).Seconds())
-			channels <- true
+			wg.Done()
 		}()
 		
 		go func() { // 9
@@ -865,7 +873,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 			}
 			t7 := time.Now()
 			fmt.Printf("Decoding Logs took: %0.2fs\n", t7.Sub(t6).Seconds())
-			channels <- true
+			wg.Done()
 		}()
 		if !releaseFlag {
 			go func() { // 10
@@ -886,7 +894,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 				}
 				t8 := time.Now()
 				fmt.Printf("Decoding DebugInfo took: %0.2fs\n", t8.Sub(t7).Seconds())
-				channels <- true
+				wg.Done()
 			}()
 
 			go func() { // 11
@@ -907,7 +915,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 				}
 				t9 := time.Now()
 				fmt.Printf("Decoding MDebug took: %0.2fs\n", t9.Sub(t8).Seconds())
-				channels <- true
+				wg.Done()
 			}()
 		}
 		
@@ -929,7 +937,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 			}
 			t10 := time.Now()
 			fmt.Printf("Decoding Counters took: %0.2fs\n", t10.Sub(t9).Seconds())
-			channels <- true
+			wg.Done()
 		}()
 
 		go func() { // 13
@@ -950,7 +958,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 			}
 			t11 := time.Now()
 			fmt.Printf("Decoding MHintsDependencies took: %0.2fs\n", t11.Sub(t10).Seconds())
-			channels <- true
+			wg.Done()
 		}()
 		
 		go func () { // 14
@@ -971,7 +979,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 			}
 			t12 := time.Now()
 			fmt.Printf("Decoding Levels took: %0.2fs\n", t12.Sub(t11).Seconds())
-			channels <- true
+			wg.Done()
 		}()
 		
 		go func() { // 15
@@ -992,7 +1000,7 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 			}
 			t13 := time.Now()
 			fmt.Printf("Decoding CurveID took: %0.2fs\n", t13.Sub(t12).Seconds())
-			channels <- true
+			wg.Done()
 		}()
 		
 		go func() { // 16
@@ -1013,18 +1021,10 @@ func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag 
 			}
 			t14 := time.Now()
 			fmt.Printf("Decoding Coefficients took: %0.2fs, length is %d\n", t14.Sub(t13).Seconds(), len(cs.Coefficients))
-			channels <- true
+			wg.Done()
 		}()
 		
-		if !releaseFlag {
-			for i := 0; i < 16; i++ {
-				<-channels
-			}
-		} else {
-			for i := 0; i < 14; i++ {
-				<-channels
-			}
-		}
+		wg.Wait()
 
 		fmt.Printf("MHints len: %v\n", len(cs.MHints))
 		return offsets.ReturnResult, nil
@@ -1428,7 +1428,7 @@ func decodeMHintsFromReader(r io.Reader) (map[int]*compiled.Hint, error) {
 func decodeMHintsFromReaderParallel(buf []byte, offset *int, maxConcurrency int) (map[int]*compiled.Hint, error) {
 	t0 := time.Now()
 	defer func() {
-		fmt.Printf("Decoding MHints took: %0.2fs\n", time.Now().Sub(t0).Seconds())
+		fmt.Printf("Decoding MHints took: %0.2fs\n", time.Since(t0).Seconds())
 	}()
 
 	mHintLen := binary.LittleEndian.Uint64(buf[*offset : *offset+8])

@@ -23,6 +23,7 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bn254/fp"
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"io"
+	"sync"
 	"io/ioutil"
 	"time"
 	"unsafe"
@@ -784,7 +785,8 @@ func readG2AffineArrayParallel(buf []byte, offset *int, maxConcurrency int) []cu
 			*offset += 128
 		}
 	} else {
-		channel := make(chan bool, maxConcurrency)
+		var wg sync.WaitGroup
+		wg.Add(maxConcurrency)
 		chunkSize := length / maxConcurrency
 		for i := 0; i < maxConcurrency; i++ {
 			startIdxOffset := chunkSize * i
@@ -793,17 +795,15 @@ func readG2AffineArrayParallel(buf []byte, offset *int, maxConcurrency int) []cu
 				endIdxOffset = length
 			}
 			go func(startIdxOffset int, endIdxOffset int) {
+				defer wg.Done()
 				ByteOffset := *offset + startIdxOffset * 128
 				for i := startIdxOffset; i < endIdxOffset; i++ {
 					result[i] = byte_to_G2Affine(buf[ByteOffset : ByteOffset+128])
 					ByteOffset += 128
 				}
-				channel <- true
 			}(startIdxOffset, endIdxOffset)
 		}
-		for i := 0; i < maxConcurrency; i++ {
-			<-channel
-		}
+		wg.Wait()
 		*offset += length * 128
 	}
 	fmt.Println("readG2AffineArray time:", time.Since(t0))
@@ -822,7 +822,8 @@ func readFrElementArrayParallel(buf []byte, offset *int, maxConcurrency int) []f
 			*offset += 32
 		}
 	} else {
-		channel := make(chan bool, maxConcurrency)
+		var wg sync.WaitGroup
+		wg.Add(maxConcurrency)
 		chunkSize := length / maxConcurrency
 		for i := 0; i < maxConcurrency; i++ {
 			startIdxOffset := chunkSize * i
@@ -831,17 +832,15 @@ func readFrElementArrayParallel(buf []byte, offset *int, maxConcurrency int) []f
 				endIdxOffset = length
 			}
 			go func(startIdxOffset int, endIdxOffset int) {
+				defer wg.Done()
 				ByteOffset := *offset + startIdxOffset * 32
 				for i := startIdxOffset; i < endIdxOffset; i++ {
 					result[i] = byte_to_frElement(buf[ByteOffset : ByteOffset+32])
 					ByteOffset += 32
 				}
-				channel <- true
 			}(startIdxOffset, endIdxOffset)
 		}
-		for i := 0; i < maxConcurrency; i++ {
-			<-channel
-		}
+		wg.Wait()
 		*offset += length * 32
 	}
 	return result
@@ -879,7 +878,8 @@ func readG1AffineArrayParallel(buf []byte, offset *int, maxConcurrency int) []cu
 			*offset += 64
 		}
 	} else {
-		channel := make(chan bool, maxConcurrency)
+		var wg sync.WaitGroup
+		wg.Add(maxConcurrency)
 		chunkSize := length / maxConcurrency
 		for i := 0; i < maxConcurrency; i++ {
 			startIdxOffset := chunkSize * i
@@ -888,17 +888,15 @@ func readG1AffineArrayParallel(buf []byte, offset *int, maxConcurrency int) []cu
 				endIdxOffset = length
 			}
 			go func(startIdxOffset int, endIdxOffset int) {
+				defer wg.Done()
 				ByteOffset := *offset + startIdxOffset * 64
 				for i := startIdxOffset; i < endIdxOffset; i++ {
 					result[i] = byte_to_G1Affine(buf[ByteOffset : ByteOffset+64])
 					ByteOffset += 64
 				}
-				channel <- true
 			}(startIdxOffset, endIdxOffset)
 		}
-		for i := 0; i < maxConcurrency; i++ {
-			<-channel
-		}
+		wg.Wait()
 		*offset += length * 64
 	}
 	
@@ -982,8 +980,7 @@ func ReadFromBytes(pk *ProvingKey, buf []byte, maxConcurrency int) (int64, error
 	pk.G2.B = readG2AffineArrayParallel(buf, &offset, maxConcurrency)
 
 	//nbWires
-	var nbWires uint64
-	nbWires = byte_to_uint64(buf[offset : offset+8])
+	nbWires := byte_to_uint64(buf[offset : offset+8])
 	//nbInfinityA
 	pk.NbInfinityA = byte_to_uint64(buf[offset+8 : offset+16])
 	//nbInfinityB
