@@ -23,6 +23,7 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bn254/fp"
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"io"
+	"sync"
 	"io/ioutil"
 	"time"
 	"unsafe"
@@ -503,6 +504,10 @@ func (pk *ProvingKey) ReadFrom(r io.Reader) (int64, error) {
 	return pk.readFrom(r)
 }
 
+func (pk *ProvingKey) ReadFromBytes(buf []byte, maxConcurrency int) (int64, error) {
+	return ReadFromBytes(pk, buf, maxConcurrency)
+}
+
 // UnsafeReadFrom behaves like ReadFrom excepts it doesn't check if the decoded points are on the curve
 // or in the correct subgroup
 func (pk *ProvingKey) UnsafeReadFrom(r io.Reader) (int64, error) {
@@ -754,6 +759,240 @@ func (pk *ProvingKey) readFrom(r io.Reader, decOptions ...func(*curve.Decoder)) 
 
 	pk.InfinityA = ReadBoolArray(r)
 	pk.InfinityB = ReadBoolArray(r)
+
+	if len(pk.InfinityA) != int(nbWires) {
+		panic("pk.InfinityA length is not equal to nbWires")
+	}
+	if len(pk.InfinityB) != int(nbWires) {
+		panic("pk.InfinityB length is not equal to nbWires")
+	}
+
+	return 0, nil
+}
+
+
+
+func readG2AffineArrayParallel(buf []byte, offset *int, maxConcurrency int) []curve.G2Affine {
+	fmt.Println("readG2AffineArray")
+	t0 := time.Now()
+	var result []curve.G2Affine
+	length := byte_to_int(buf[*offset : *offset+8])
+	*offset += 8
+	result = make([]curve.G2Affine, length)
+	if length < maxConcurrency * 16 {
+		for i := 0; i < length; i++ {
+			result[i] = byte_to_G2Affine(buf[*offset : *offset+128])
+			*offset += 128
+		}
+	} else {
+		var wg sync.WaitGroup
+		wg.Add(maxConcurrency)
+		chunkSize := length / maxConcurrency
+		for i := 0; i < maxConcurrency; i++ {
+			startIdxOffset := chunkSize * i
+			endIdxOffset := chunkSize * (i + 1)
+			if i == maxConcurrency - 1 {
+				endIdxOffset = length
+			}
+			go func(startIdxOffset int, endIdxOffset int) {
+				defer wg.Done()
+				ByteOffset := *offset + startIdxOffset * 128
+				for i := startIdxOffset; i < endIdxOffset; i++ {
+					result[i] = byte_to_G2Affine(buf[ByteOffset : ByteOffset+128])
+					ByteOffset += 128
+				}
+			}(startIdxOffset, endIdxOffset)
+		}
+		wg.Wait()
+		*offset += length * 128
+	}
+	fmt.Println("readG2AffineArray time:", time.Since(t0))
+	return result
+}
+
+func readFrElementArrayParallel(buf []byte, offset *int, maxConcurrency int) []fr.Element {
+	var result []fr.Element
+	length := byte_to_int(buf[*offset : *offset+8])
+	result = make([]fr.Element, length)
+	*offset += 8
+
+	if length < maxConcurrency * 128 {
+		for i := 0; i < length; i++ {
+			result[i] = byte_to_frElement(buf[*offset : *offset+32])
+			*offset += 32
+		}
+	} else {
+		var wg sync.WaitGroup
+		wg.Add(maxConcurrency)
+		chunkSize := length / maxConcurrency
+		for i := 0; i < maxConcurrency; i++ {
+			startIdxOffset := chunkSize * i
+			endIdxOffset := chunkSize * (i + 1)
+			if i == maxConcurrency - 1 {
+				endIdxOffset = length
+			}
+			go func(startIdxOffset int, endIdxOffset int) {
+				defer wg.Done()
+				ByteOffset := *offset + startIdxOffset * 32
+				for i := startIdxOffset; i < endIdxOffset; i++ {
+					result[i] = byte_to_frElement(buf[ByteOffset : ByteOffset+32])
+					ByteOffset += 32
+				}
+			}(startIdxOffset, endIdxOffset)
+		}
+		wg.Wait()
+		*offset += length * 32
+	}
+	return result
+}
+
+func readFrElementArrayDim2Parallel(buf []byte, offset *int, maxConcurrency int) [][]fr.Element {
+	fmt.Println("Reading FrElementArrayDim2")
+	t0 := time.Now()
+	var result [][]fr.Element
+
+	
+	length := byte_to_int(buf[*offset : *offset+8])
+	*offset += 8
+	for i := 0; i < length; i++ {
+		result = append(result, readFrElementArrayParallel(buf, offset, maxConcurrency))
+	}
+	
+	t1 := time.Now()
+	fmt.Println("Reading FrElementArrayDim2 took", t1.Sub(t0))
+	return result
+}
+
+
+func readG1AffineArrayParallel(buf []byte, offset *int, maxConcurrency int) []curve.G1Affine {
+	fmt.Println("readG1AffineArray")
+	t0 := time.Now()
+	var result []curve.G1Affine
+	
+	length := byte_to_int(buf[*offset : *offset+8])
+	*offset += 8
+	result = make([]curve.G1Affine, length)
+	if length < maxConcurrency * 64 {
+		for i := 0; i < length; i++ {
+			result[i] = byte_to_G1Affine(buf[*offset : *offset+64])
+			*offset += 64
+		}
+	} else {
+		var wg sync.WaitGroup
+		wg.Add(maxConcurrency)
+		chunkSize := length / maxConcurrency
+		for i := 0; i < maxConcurrency; i++ {
+			startIdxOffset := chunkSize * i
+			endIdxOffset := chunkSize * (i + 1)
+			if i == maxConcurrency - 1 {
+				endIdxOffset = length
+			}
+			go func(startIdxOffset int, endIdxOffset int) {
+				defer wg.Done()
+				ByteOffset := *offset + startIdxOffset * 64
+				for i := startIdxOffset; i < endIdxOffset; i++ {
+					result[i] = byte_to_G1Affine(buf[ByteOffset : ByteOffset+64])
+					ByteOffset += 64
+				}
+			}(startIdxOffset, endIdxOffset)
+		}
+		wg.Wait()
+		*offset += length * 64
+	}
+	
+	
+	fmt.Println("readG1AffineArray time:", time.Since(t0))
+	return result
+}
+
+
+func ReadBoolArrayParallel(buf []byte, offset *int, maxConcurrency int) []bool {
+	var result []bool
+	length := byte_to_int(buf[*offset : *offset+8])
+	*offset += 8
+	b := buf[*offset : *offset+length]
+	*offset += length
+	for i := 0; i < length; i++ {
+		if b[i] == 1 {
+			result = append(result, true)
+		} else {
+			result = append(result, false)
+		}
+	}
+	return result
+}
+
+func ReadFromBytes(pk *ProvingKey, buf []byte, maxConcurrency int) (int64, error) {
+
+	fmt.Println("Reading from Bytes proving key")
+	pkDomainCardinalityBytes := buf[0 : 8]
+	pk.Domain.Cardinality = byte_to_uint64(pkDomainCardinalityBytes)
+	pkDomainCardinalityInvBytes := buf[8 : 40]
+	pk.Domain.CardinalityInv = byte_to_frElement(pkDomainCardinalityInvBytes)
+	pkDomainGeneratorBytes := buf[40 : 72]
+	pk.Domain.Generator = byte_to_frElement(pkDomainGeneratorBytes)
+	pkDomainGeneratorInvBytes := buf[72 : 104]
+	pk.Domain.GeneratorInv = byte_to_frElement(pkDomainGeneratorInvBytes)
+	pkDomainFrMultiplicativeGenBytes := buf[104 : 136]
+	pk.Domain.FrMultiplicativeGen = byte_to_frElement(pkDomainFrMultiplicativeGenBytes)
+	pkDomainFrMultiplicativeGenInvBytes := buf[136 : 168]
+	pk.Domain.FrMultiplicativeGenInv = byte_to_frElement(pkDomainFrMultiplicativeGenInvBytes)
+
+	offset := 168
+	//Twiddles
+	fmt.Println("Reading Twiddles")
+	pk.Domain.Twiddles = readFrElementArrayDim2Parallel(buf, &offset, maxConcurrency)
+	fmt.Println("Reading TwiddlesInv")
+	pk.Domain.TwiddlesInv = readFrElementArrayDim2Parallel(buf, &offset, maxConcurrency)
+	fmt.Println("Reading CosetTable")
+
+	//pk.Domain.CosetTable = readFrElementArray(r, true, "cosettable.bin")
+	pk.Domain.CosetTable = readFrElementArrayParallel(buf, &offset, maxConcurrency)
+	fmt.Println("Reading CosetTableReversed")
+
+	pk.Domain.CosetTableReversed = readFrElementArrayParallel(buf, &offset, maxConcurrency)
+	fmt.Println("Reading CosetTableInv")
+	pk.Domain.CosetTableInv = readFrElementArrayParallel(buf, &offset, maxConcurrency)
+	fmt.Println("Reading CosetTableInvReversed")
+	pk.Domain.CosetTableInvReversed = readFrElementArrayParallel(buf, &offset, maxConcurrency)
+
+	//G1
+	pk.G1.Alpha = byte_to_G1Affine(buf[offset : offset+64])
+	pk.G1.Beta = byte_to_G1Affine(buf[offset+64 : offset+128])
+	pk.G1.Delta = byte_to_G1Affine(buf[offset+128 : offset+192])
+	offset += 192
+
+	fmt.Println("Reading G1A")
+	pk.G1.A = readG1AffineArrayParallel(buf, &offset, maxConcurrency)
+	fmt.Println("Reading G1B")
+	pk.G1.B = readG1AffineArrayParallel(buf, &offset, maxConcurrency)
+	fmt.Println("Reading G1Z")
+	pk.G1.Z = readG1AffineArrayParallel(buf, &offset, maxConcurrency)
+	fmt.Println("Reading G1K")
+	pk.G1.K = readG1AffineArrayParallel(buf, &offset, maxConcurrency)
+
+	//g2
+	pk.G2.Beta = byte_to_G2Affine(buf[offset : offset+128])
+	pk.G2.Delta = byte_to_G2Affine(buf[offset+128 : offset+256])
+	offset += 256
+
+	fmt.Println("Reading G2B")
+	pk.G2.B = readG2AffineArrayParallel(buf, &offset, maxConcurrency)
+
+	//nbWires
+	nbWires := byte_to_uint64(buf[offset : offset+8])
+	//nbInfinityA
+	pk.NbInfinityA = byte_to_uint64(buf[offset+8 : offset+16])
+	//nbInfinityB
+	pk.NbInfinityB = byte_to_uint64(buf[offset+16 : offset+24])
+	offset += 24
+
+	//infinityA
+	pk.InfinityA = make([]bool, nbWires)
+	pk.InfinityB = make([]bool, nbWires)
+
+	pk.InfinityA = ReadBoolArrayParallel(buf, &offset, maxConcurrency)
+	pk.InfinityB = ReadBoolArrayParallel(buf, &offset, maxConcurrency)
 
 	if len(pk.InfinityA) != int(nbWires) {
 		panic("pk.InfinityA length is not equal to nbWires")

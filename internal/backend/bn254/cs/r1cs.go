@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"os"
 	"reflect"
 	"runtime"
 	"strings"
@@ -40,9 +41,12 @@ import (
 	"github.com/consensys/gnark/internal/backend/ioutils"
 	"github.com/consensys/gnark/logger"
 
+	"bytes"
 	"math"
 
 	"github.com/consensys/gnark-crypto/ecc"
+
+	"encoding/json"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 
@@ -661,6 +665,533 @@ func byte_to_uint64(b []byte, offset int) (uint64, int) {
 	return result, 8
 }
 
+type CircuitOffsets struct {
+	MHints int64 `json:"mhints"`
+	Constraints int64 `json:"constraints"`
+	ReturnResult int64 `json:"return_result"`
+	ConstraintSystemSchema int64 `json:"constraint_system_schema"`
+	ConstraintSystemNbInternalVariables int64 `json:"constraint_system_nb_internal_variables"`
+	ConstraintSystemNbPublicVariables int64 `json:"constraint_system_nb_public_variables"`
+	ConstraintSystemNbSecretVariables int64 `json:"constraint_system_nb_secret_variables"`
+	ConstraintSystemPublic int64 `json:"constraint_system_public"`
+	ConstraintSystemSecret int64 `json:"constraint_system_secret"`
+	ConstraintSystemLogs int64 `json:"constraint_system_logs"`
+	ConstraintSystemDebugInfo int64 `json:"constraint_system_debug_info"`
+	ConstraintSystemMDebug int64 `json:"constraint_system_mdebug"`
+	ConstraintSystemCounters int64 `json:"constraint_system_counters"`
+	ConstraintSystemMHintsDependencies int64 `json:"constraint_system_mhints_dependencies"`
+	ConstraintSystemLevels int64 `json:"constraint_system_levels"`
+	ConstraintSystemCurveID int64 `json:"constraint_system_curve_id"`
+	Coefficients int64 `json:"coefficients"`
+
+}
+
+func ReadCircuitFromBytes(cs *R1CS, buf []byte, maxConcurrency int, releaseFlag bool, offsetFilePath string) (int64, error) {
+	offsetFileHandle, err := os.ReadFile(offsetFilePath)
+
+	offsetExists := true
+	var offsets CircuitOffsets
+	if err != nil || len(offsetFileHandle) == 0 {
+		offsetExists = false
+		fmt.Println("No offset file found, starting from scratch", err, len(offsetFileHandle), offsetFilePath)
+	} else {
+		err = json.Unmarshal(offsetFileHandle, &offsets)
+		if err != nil {
+			offsetExists = false
+			fmt.Println("Offset file found, but could not be parsed, starting from scratch")
+		}
+	}
+
+	if offsetExists {
+		var wg sync.WaitGroup
+		if releaseFlag {
+			wg.Add(14) 
+		} else {
+			wg.Add(16)
+		}
+		// Parallel decoding
+		go func() { // 1
+			offset := int(offsets.MHints)
+			cs.ConstraintSystem.MHints, err = decodeMHintsFromReaderParallel(buf, &offset, maxConcurrency)
+			if err != nil {
+				panic(err)
+			}
+			wg.Done()
+		}()
+		
+		go func() { // 2
+			offset := int(offsets.Constraints)
+			cs.Constraints, err = decodeConstraintsFromReaderParallel(buf, &offset, maxConcurrency)
+			if err != nil {
+				panic(err)
+			}
+			wg.Done()
+		}()
+		
+		go func() { // 3
+			dm, err := cbor.DecOptions{
+				MaxArrayElements: 134217728,
+				MaxMapPairs:      134217728,
+			}.DecMode()
+		
+			if err != nil {
+				panic(err)
+			}
+			cs.ConstraintSystem.Schema = &schema.Schema{}
+			r := bytes.NewReader(buf[offsets.ConstraintSystemSchema:offsets.ConstraintSystemNbInternalVariables])
+			decoder := dm.NewDecoder(r)
+			t0 := time.Now()
+			err = decoder.Decode(cs.ConstraintSystem.Schema)
+			if err != nil {
+				panic(err)
+			}
+			t1 := time.Now()
+			fmt.Printf("Decoding Schema took: %0.2fs\n", t1.Sub(t0).Seconds())
+			wg.Done()
+		}()
+		
+		go func() { // 4
+			dm, err := cbor.DecOptions{
+				MaxArrayElements: 134217728,
+				MaxMapPairs:      134217728,
+			}.DecMode()
+		
+			if err != nil {
+				panic(err)
+			}
+			t1 := time.Now()
+			r := bytes.NewReader(buf[offsets.ConstraintSystemNbInternalVariables:offsets.ConstraintSystemNbPublicVariables])
+			decoder := dm.NewDecoder(r)
+			err = decoder.Decode(&cs.ConstraintSystem.NbInternalVariables)
+			if err != nil {
+				panic(err)
+			}
+			t2 := time.Now()
+			fmt.Printf("Decoding NbInternalVariables took: %0.2fs\n", t2.Sub(t1).Seconds())
+			wg.Done()
+		}()
+		
+		go func() { // 5
+			dm, err := cbor.DecOptions{
+				MaxArrayElements: 134217728,
+				MaxMapPairs:      134217728,
+			}.DecMode()
+		
+			if err != nil {
+				panic(err)
+			}
+			t2 := time.Now()
+			r := bytes.NewReader(buf[offsets.ConstraintSystemNbPublicVariables:offsets.ConstraintSystemNbSecretVariables])
+			decoder := dm.NewDecoder(r)
+			err = decoder.Decode(&cs.ConstraintSystem.NbPublicVariables)
+			if err != nil {
+				panic(err)
+			}
+			t3 := time.Now()
+			fmt.Printf("Decoding NbPublicVariables took: %0.2fs\n", t3.Sub(t2).Seconds())
+			wg.Done()
+		}()
+
+		go func() { // 6
+			dm, err := cbor.DecOptions{
+				MaxArrayElements: 134217728,
+				MaxMapPairs:      134217728,
+			}.DecMode()
+		
+			if err != nil {
+				panic(err)
+			}
+			t3 := time.Now()
+			r := bytes.NewReader(buf[offsets.ConstraintSystemNbSecretVariables:offsets.ConstraintSystemPublic])
+			decoder := dm.NewDecoder(r)
+			err = decoder.Decode(&cs.ConstraintSystem.NbSecretVariables)
+			if err != nil {
+				panic(err)
+			}
+			t4 := time.Now()
+			fmt.Printf("Decoding NbSecretVariables took: %0.2fs\n", t4.Sub(t3).Seconds())
+			wg.Done()
+		}()
+		
+		go func() { // 7
+			dm, err := cbor.DecOptions{
+				MaxArrayElements: 134217728,
+				MaxMapPairs:      134217728,
+			}.DecMode()
+		
+			if err != nil {
+				panic(err)
+			}
+			t4 := time.Now()
+			r := bytes.NewReader(buf[offsets.ConstraintSystemPublic:offsets.ConstraintSystemSecret])
+			decoder := dm.NewDecoder(r)
+			err = decoder.Decode(&cs.ConstraintSystem.Public)
+			if err != nil {
+				panic(err)
+			}
+			t5 := time.Now()
+			fmt.Printf("Decoding Public took: %0.2fs\n", t5.Sub(t4).Seconds())
+			wg.Done()
+		}()
+
+		go func() { // 8
+			dm, err := cbor.DecOptions{
+				MaxArrayElements: 134217728,
+				MaxMapPairs:      134217728,
+			}.DecMode()
+		
+			if err != nil {
+				panic(err)
+			}
+			t5 := time.Now()
+			r := bytes.NewReader(buf[offsets.ConstraintSystemSecret:offsets.ConstraintSystemLogs])
+			decoder := dm.NewDecoder(r)
+			err = decoder.Decode(&cs.ConstraintSystem.Secret)
+			if err != nil {
+				panic(err)
+			}
+			t6 := time.Now()
+			fmt.Printf("Decoding Secret took: %0.2fs\n", t6.Sub(t5).Seconds())
+			wg.Done()
+		}()
+		
+		go func() { // 9
+			dm, err := cbor.DecOptions{
+				MaxArrayElements: 134217728,
+				MaxMapPairs:      134217728,
+			}.DecMode()
+		
+			if err != nil {
+				panic(err)
+			}
+			t6 := time.Now()
+			r := bytes.NewReader(buf[offsets.ConstraintSystemLogs:offsets.ConstraintSystemDebugInfo])
+			decoder := dm.NewDecoder(r)
+			err = decoder.Decode(&cs.ConstraintSystem.Logs)
+			if err != nil {
+				panic(err)
+			}
+			t7 := time.Now()
+			fmt.Printf("Decoding Logs took: %0.2fs\n", t7.Sub(t6).Seconds())
+			wg.Done()
+		}()
+		if !releaseFlag {
+			go func() { // 10
+				dm, err := cbor.DecOptions{
+					MaxArrayElements: 134217728,
+					MaxMapPairs:      134217728,
+				}.DecMode()
+			
+				if err != nil {
+					panic(err)
+				}
+				t7 := time.Now()
+				r := bytes.NewReader(buf[offsets.ConstraintSystemDebugInfo:offsets.ConstraintSystemMDebug])
+				decoder := dm.NewDecoder(r)
+				err = decoder.Decode(&cs.ConstraintSystem.DebugInfo)
+				if err != nil {
+					panic(err)
+				}
+				t8 := time.Now()
+				fmt.Printf("Decoding DebugInfo took: %0.2fs\n", t8.Sub(t7).Seconds())
+				wg.Done()
+			}()
+
+			go func() { // 11
+				dm, err := cbor.DecOptions{
+					MaxArrayElements: 134217728,
+					MaxMapPairs:      134217728,
+				}.DecMode()
+			
+				if err != nil {
+					panic(err)
+				}
+				t8 := time.Now()
+				r := bytes.NewReader(buf[offsets.ConstraintSystemMDebug:offsets.ConstraintSystemCounters])
+				decoder := dm.NewDecoder(r)
+				err = decoder.Decode(&cs.ConstraintSystem.MDebug)
+				if err != nil {
+					panic(err)
+				}
+				t9 := time.Now()
+				fmt.Printf("Decoding MDebug took: %0.2fs\n", t9.Sub(t8).Seconds())
+				wg.Done()
+			}()
+		}
+		
+		go func() { // 12
+			dm, err := cbor.DecOptions{
+				MaxArrayElements: 134217728,
+				MaxMapPairs:      134217728,
+			}.DecMode()
+		
+			if err != nil {
+				panic(err)
+			}
+			t9 := time.Now()
+			r := bytes.NewReader(buf[offsets.ConstraintSystemCounters:offsets.ConstraintSystemMHintsDependencies])
+			decoder := dm.NewDecoder(r)
+			err = decoder.Decode(&cs.ConstraintSystem.Counters)
+			if err != nil {
+				panic(err)
+			}
+			t10 := time.Now()
+			fmt.Printf("Decoding Counters took: %0.2fs\n", t10.Sub(t9).Seconds())
+			wg.Done()
+		}()
+
+		go func() { // 13
+			dm, err := cbor.DecOptions{
+				MaxArrayElements: 134217728,
+				MaxMapPairs:      134217728,
+			}.DecMode()
+		
+			if err != nil {
+				panic(err)
+			}
+			t10 := time.Now()
+			r := bytes.NewReader(buf[offsets.ConstraintSystemMHintsDependencies:offsets.ConstraintSystemLevels])
+			decoder := dm.NewDecoder(r)
+			err = decoder.Decode(&cs.ConstraintSystem.MHintsDependencies)
+			if err != nil {
+				panic(err)
+			}
+			t11 := time.Now()
+			fmt.Printf("Decoding MHintsDependencies took: %0.2fs\n", t11.Sub(t10).Seconds())
+			wg.Done()
+		}()
+		
+		go func () { // 14
+			dm, err := cbor.DecOptions{
+				MaxArrayElements: 134217728,
+				MaxMapPairs:      134217728,
+			}.DecMode()
+		
+			if err != nil {
+				panic(err)
+			}
+			t11 := time.Now()
+			r := bytes.NewReader(buf[offsets.ConstraintSystemLevels:offsets.ConstraintSystemCurveID])
+			decoder := dm.NewDecoder(r)
+			err = decoder.Decode(&cs.ConstraintSystem.Levels)
+			if err != nil {
+				panic(err)
+			}
+			t12 := time.Now()
+			fmt.Printf("Decoding Levels took: %0.2fs\n", t12.Sub(t11).Seconds())
+			wg.Done()
+		}()
+		
+		go func() { // 15
+			dm, err := cbor.DecOptions{
+				MaxArrayElements: 134217728,
+				MaxMapPairs:      134217728,
+			}.DecMode()
+		
+			if err != nil {
+				panic(err)
+			}
+			t12 := time.Now()
+			r := bytes.NewReader(buf[offsets.ConstraintSystemCurveID:offsets.Coefficients])
+			decoder := dm.NewDecoder(r)
+			err = decoder.Decode(&cs.ConstraintSystem.CurveID)
+			if err != nil {
+				panic(err)
+			}
+			t13 := time.Now()
+			fmt.Printf("Decoding CurveID took: %0.2fs\n", t13.Sub(t12).Seconds())
+			wg.Done()
+		}()
+		
+		go func() { // 16
+			dm, err := cbor.DecOptions{
+				MaxArrayElements: 134217728,
+				MaxMapPairs:      134217728,
+			}.DecMode()
+		
+			if err != nil {
+				panic(err)
+			}
+			t13 := time.Now()
+			r := bytes.NewReader(buf[offsets.Coefficients:])
+			decoder := dm.NewDecoder(r)
+			err = decoder.Decode(&cs.Coefficients)
+			if err != nil {
+				panic(err)
+			}
+			t14 := time.Now()
+			fmt.Printf("Decoding Coefficients took: %0.2fs, length is %d\n", t14.Sub(t13).Seconds(), len(cs.Coefficients))
+			wg.Done()
+		}()
+		
+		wg.Wait()
+
+		fmt.Printf("MHints len: %v\n", len(cs.MHints))
+		return offsets.ReturnResult, nil
+	} else {
+		dm, err := cbor.DecOptions{
+			MaxArrayElements: 134217728,
+			MaxMapPairs:      134217728,
+		}.DecMode()
+	
+		if err != nil {
+			return 0, err
+		}
+		offset := 0
+		cs.ConstraintSystem.Schema = &schema.Schema{}
+		offsets.MHints = int64(offset)
+		cs.ConstraintSystem.MHints, err = decodeMHintsFromReaderParallel(buf, &offset, maxConcurrency)
+		if err != nil {
+			return 0, err
+		}
+		offsets.Constraints = int64(offset)
+		cs.Constraints, err = decodeConstraintsFromReaderParallel(buf, &offset, maxConcurrency)
+		if err != nil {
+			return 0, err
+		}
+
+		r := bytes.NewReader(buf[offset:])
+		decoder := dm.NewDecoder(r)
+		t0 := time.Now()
+		offsets.ConstraintSystemSchema = int64(offset)
+		err = decoder.Decode(cs.ConstraintSystem.Schema)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t1 := time.Now()
+		fmt.Printf("Decoding Schema took: %0.2fs\n", t1.Sub(t0).Seconds())
+
+		offsets.ConstraintSystemNbInternalVariables = int64(offset) + int64(decoder.NumBytesRead())
+		err = decoder.Decode(&cs.ConstraintSystem.NbInternalVariables)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t2 := time.Now()
+		fmt.Printf("Decoding NbInternalVariables took: %0.2fs\n", t2.Sub(t1).Seconds())
+
+		offsets.ConstraintSystemNbPublicVariables = int64(offset) + int64(decoder.NumBytesRead())
+		err = decoder.Decode(&cs.ConstraintSystem.NbPublicVariables)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t3 := time.Now()
+		fmt.Printf("Decoding NbPublicVariables took: %0.2fs\n", t3.Sub(t2).Seconds())
+
+		offsets.ConstraintSystemNbSecretVariables = int64(offset) + int64(decoder.NumBytesRead())
+		err = decoder.Decode(&cs.ConstraintSystem.NbSecretVariables)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t4 := time.Now()
+		fmt.Printf("Decoding NbSecretVariables took: %0.2fs\n", t4.Sub(t3).Seconds())
+
+		offsets.ConstraintSystemPublic = int64(offset) + int64(decoder.NumBytesRead())
+		err = decoder.Decode(&cs.ConstraintSystem.Public)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t5 := time.Now()
+		fmt.Printf("Decoding Public took: %0.2fs\n", t5.Sub(t4).Seconds())
+
+		offsets.ConstraintSystemSecret = int64(offset) + int64(decoder.NumBytesRead())
+		err = decoder.Decode(&cs.ConstraintSystem.Secret)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t6 := time.Now()
+		fmt.Printf("Decoding Secret took: %0.2fs\n", t6.Sub(t5).Seconds())
+
+		offsets.ConstraintSystemLogs = int64(offset) + int64(decoder.NumBytesRead())
+		err = decoder.Decode(&cs.ConstraintSystem.Logs)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t7 := time.Now()
+		fmt.Printf("Decoding Logs took: %0.2fs\n", t7.Sub(t6).Seconds())
+
+		offsets.ConstraintSystemDebugInfo = int64(offset) + int64(decoder.NumBytesRead())
+		err = decoder.Decode(&cs.ConstraintSystem.DebugInfo)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t8 := time.Now()
+		fmt.Printf("Decoding DebugInfo took: %0.2fs\n", t8.Sub(t7).Seconds())
+
+		offsets.ConstraintSystemMDebug = int64(offset) + int64(decoder.NumBytesRead())
+		err = decoder.Decode(&cs.ConstraintSystem.MDebug)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t9 := time.Now()
+		fmt.Printf("Decoding MDebug took: %0.2fs\n", t9.Sub(t8).Seconds())
+
+		offsets.ConstraintSystemCounters = int64(offset) + int64(decoder.NumBytesRead())
+		err = decoder.Decode(&cs.ConstraintSystem.Counters)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t10 := time.Now()
+		fmt.Printf("Decoding Counters took: %0.2fs\n", t10.Sub(t9).Seconds())
+
+		t11 := time.Now()
+		//fmt.Printf("Decoding MHints took: %0.2fs\n", t11.Sub(t10).Seconds())
+		offsets.ConstraintSystemMHintsDependencies = int64(offset) + int64(decoder.NumBytesRead())
+		err = decoder.Decode(&cs.ConstraintSystem.MHintsDependencies)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t12 := time.Now()
+		fmt.Printf("Decoding MHintsDependencies took: %0.2fs\n", t12.Sub(t11).Seconds())
+
+		offsets.ConstraintSystemLevels = int64(offset) + int64(decoder.NumBytesRead())
+		err = decoder.Decode(&cs.ConstraintSystem.Levels)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t13 := time.Now()
+		fmt.Printf("Decoding Levels took: %0.2fs\n", t13.Sub(t12).Seconds())
+
+		offsets.ConstraintSystemCurveID = int64(offset) + int64(decoder.NumBytesRead())
+		err = decoder.Decode(&cs.ConstraintSystem.CurveID)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t14 := time.Now()
+		fmt.Printf("Decoding CurveID took: %0.2fs\n", t14.Sub(t13).Seconds())
+
+		//err = decoder.Decode(&cs.Constraints)
+		//if err != nil {
+		//	return int64(decoder.NumBytesRead()), err
+		//}
+
+		t15 := time.Now()
+		//fmt.Printf("Decoding Constraints took: %0.2fs\n", t15.Sub(t14).Seconds())
+
+		offsets.Coefficients = int64(offset) + int64(decoder.NumBytesRead())
+		err = decoder.Decode(&cs.Coefficients)
+		if err != nil {
+			return int64(decoder.NumBytesRead()), err
+		}
+		t16 := time.Now()
+		fmt.Printf("Decoding Coefficients took: %0.2fs, length is %d\n", t16.Sub(t15).Seconds(), len(cs.Coefficients))
+
+		fmt.Printf("MHints len: %v\n", len(cs.MHints))
+
+		offsets.ReturnResult = int64(decoder.NumBytesRead())
+
+		// write offset to file
+		offsetBytes, err := json.Marshal(offsets)
+		if err != nil {
+			panic(err)
+		}
+		err = os.WriteFile(offsetFilePath, offsetBytes, 0644)
+		if err != nil {
+			panic(err)
+		}
+		return int64(decoder.NumBytesRead()), nil
+	}
+}
+
 // ReadFrom attempts to decode R1CS from io.Reader using cbor
 func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 	dm, err := cbor.DecOptions{
@@ -894,6 +1425,97 @@ func decodeMHintsFromReader(r io.Reader) (map[int]*compiled.Hint, error) {
 	return decodeMHints(mHintBytes)
 }
 
+func decodeMHintsFromReaderParallel(buf []byte, offset *int, maxConcurrency int) (map[int]*compiled.Hint, error) {
+	t0 := time.Now()
+	defer func() {
+		fmt.Printf("Decoding MHints took: %0.2fs\n", time.Since(t0).Seconds())
+	}()
+
+	mHintLen := binary.LittleEndian.Uint64(buf[*offset : *offset+8])
+	*offset += 8
+	result, err := decodeMHintsParallel(buf[*offset : *offset+int(mHintLen)], maxConcurrency)
+	*offset += int(mHintLen)
+	return result, err
+}
+
+func decodeMHintsParallel(mHintBytes []byte, maxConcurrency int) (map[int]*compiled.Hint, error) {
+	//start decode hint
+	hint := make(map[int]*compiled.Hint)
+	bytes_used := 0
+	lenHint, offset := byte_to_int(mHintBytes, bytes_used)
+	bytes_used += offset
+	for i := 0; i < lenHint; i++ {
+		k, offset := byte_to_int(mHintBytes, bytes_used)
+		bytes_used += offset
+		var v compiled.Hint
+
+		mode, offset := byte_to_int(mHintBytes, bytes_used)
+		bytes_used += offset
+		if mode == 0 {
+			lastKey, offset := byte_to_int(mHintBytes, bytes_used)
+			bytes_used += offset
+			hint[k] = hint[lastKey]
+			continue
+		} else if mode == 1 {
+		} else {
+			panic("mode error")
+		}
+
+		v.ID, offset = byte_to_hintID(mHintBytes, bytes_used)
+		bytes_used += offset
+
+		wireLen, offset := byte_to_int(mHintBytes, bytes_used)
+		bytes_used += offset
+		v.Wires = make([]int, wireLen)
+		for j := 0; j < wireLen; j++ {
+			v.Wires[j], offset = byte_to_int(mHintBytes, bytes_used)
+			bytes_used += offset
+		}
+		inputLen, offset := byte_to_int(mHintBytes, bytes_used)
+		bytes_used += offset
+		v.Inputs = make([]interface{}, inputLen)
+		for j := 0; j < inputLen; j++ {
+			typeTag, offset := byte_to_int(mHintBytes, bytes_used)
+			bytes_used += offset
+			switch typeTag {
+			case 25446:
+				//big.Int
+				val := new(big.Int)
+				bigIntLen, offset := byte_to_int(mHintBytes, bytes_used)
+				bytes_used += offset
+				bb := mHintBytes[bytes_used : bytes_used+bigIntLen]
+				bytes_used += bigIntLen
+				val.SetBytes(bb)
+				v.Inputs[j] = *val
+			case 25447:
+				//*big.Int
+				val := new(big.Int)
+				bigIntLen, offset := byte_to_int(mHintBytes, bytes_used)
+				bytes_used += offset
+				bb := mHintBytes[bytes_used : bytes_used+bigIntLen]
+				bytes_used += bigIntLen
+				val.SetBytes(bb)
+				v.Inputs[j] = val
+			case 25443:
+				//LinearExpression
+				linLen, offset := byte_to_int(mHintBytes, bytes_used)
+				bytes_used += offset
+				val := make([]compiled.Term, linLen)
+				for k := 0; k < linLen; k++ {
+					uint64v, offset := byte_to_uint64(mHintBytes, bytes_used)
+					bytes_used += offset
+					val[k] = compiled.Term(uint64v)
+				}
+				v.Inputs[j] = compiled.LinearExpression(val)
+			default:
+				panic("typeTag error")
+			}
+		}
+		hint[k] = &v
+	}
+	return hint, nil
+}
+
 func decodeMHints(mHintBytes []byte) (map[int]*compiled.Hint, error) {
 
 	//start decode hint
@@ -1027,6 +1649,27 @@ func decodeConstraintsFromReader(r io.Reader) ([]compiled.R1C, error) {
 		return nil, err
 	}
 	result := decodeConstraints(constraintBytes)
+
+	for _, r1c := range result {
+		length += len(r1c.L)
+		length += len(r1c.R)
+		length += len(r1c.O)
+	}
+
+	return result, nil
+}
+
+func decodeConstraintsFromReaderParallel(buf []byte, offset *int, maxConcurrency int) ([]compiled.R1C, error) {
+	t0 := time.Now()
+	length := 0
+	defer func() {
+		fmt.Printf("Decoding Constraints took: %0.2fs, length %d\n", time.Now().Sub(t0).Seconds(), length)
+	}()
+
+	constraintLen := binary.LittleEndian.Uint64(buf[*offset : *offset+8])
+	*offset += 8
+	result := decodeConstraints(buf[*offset : *offset+int(constraintLen)])
+	*offset += int(constraintLen)
 
 	for _, r1c := range result {
 		length += len(r1c.L)
