@@ -309,7 +309,7 @@ func parse(r []Field, input interface{}, target reflect.Type, parentFullName, pa
 
 	// struct
 	if tValue.Kind() == reflect.Struct {
-		parseStruct(r, tValue, target, parentFullName, parentGoName, parentTagName, parentVisibility, handler, nbPublic, nbSecret)
+		return parseStruct(r, tValue, target, parentFullName, parentGoName, parentTagName, parentVisibility, handler, nbPublic, nbSecret)
 	}
 
 	if tValue.Kind() == reflect.Slice || tValue.Kind() == reflect.Array {
