@@ -52,14 +52,15 @@ func TestMimcAll(t *testing.T) {
 		ecc.BW6_761:   hash.MIMC_BW6_761,
 		ecc.BW6_633:   hash.MIMC_BW6_633,
 		ecc.BLS24_315: hash.MIMC_BLS24_315,
+		ecc.BLS24_317: hash.MIMC_BLS24_317,
 	}
 
 	for curve, hashFunc := range curves {
 
 		// minimal cs res = hash(data)
-		var circuit, witness, wrongWitness mimcCircuit
+		var circuit, validWitness, invalidWitness mimcCircuit
 
-		modulus := curve.Info().Fr.Modulus()
+		modulus := curve.ScalarField()
 		var data [10]big.Int
 		data[0].Sub(modulus, big.NewInt(1))
 		for i := 1; i < 10; i++ {
@@ -75,17 +76,20 @@ func TestMimcAll(t *testing.T) {
 
 		// assert correctness against correct witness
 		for i := 0; i < 10; i++ {
-			witness.Data[i] = data[i].String()
+			validWitness.Data[i] = data[i].String()
 		}
-		witness.ExpectedResult = expectedh
-		assert.SolvingSucceeded(&circuit, &witness, test.WithCurves(curve))
+		validWitness.ExpectedResult = expectedh
 
 		// assert failure against wrong witness
 		for i := 0; i < 10; i++ {
-			wrongWitness.Data[i] = data[i].Sub(&data[i], big.NewInt(1)).String()
+			invalidWitness.Data[i] = data[i].Sub(&data[i], big.NewInt(1)).String()
 		}
-		wrongWitness.ExpectedResult = expectedh
-		assert.SolvingFailed(&circuit, &wrongWitness, test.WithCurves(curve))
+		invalidWitness.ExpectedResult = expectedh
+
+		assert.CheckCircuit(&circuit,
+			test.WithValidAssignment(&validWitness),
+			test.WithInvalidAssignment(&invalidWitness),
+			test.WithCurves(curve))
 	}
 
 }

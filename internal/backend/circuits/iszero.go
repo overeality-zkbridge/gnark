@@ -1,7 +1,6 @@
 package circuits
 
 import (
-	"github.com/consensys/gnark"
 	"github.com/consensys/gnark/frontend"
 )
 
@@ -13,8 +12,12 @@ func (circuit *isZero) Define(api frontend.API) error {
 
 	a := api.IsZero(circuit.X)
 	b := api.IsZero(circuit.Y)
+	c := api.IsZero(1)
+	d := api.IsZero(0)
 	api.AssertIsEqual(a, 1)
 	api.AssertIsEqual(b, 0)
+	api.AssertIsEqual(c, 0)
+	api.AssertIsEqual(d, 1)
 
 	return nil
 }
@@ -29,5 +32,5 @@ func init() {
 	bad.X = (23)
 	bad.Y = (0)
 
-	addEntry("isZero", &circuit, &good, &bad, gnark.Curves())
+	addEntry("isZero", &circuit, &good, &bad, nil)
 }

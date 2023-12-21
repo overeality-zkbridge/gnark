@@ -18,81 +18,105 @@ package merkle
 
 import (
 	"bytes"
+	"crypto/rand"
 	"os"
 	"testing"
 
 	"github.com/consensys/gnark-crypto/accumulator/merkletree"
 	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
-	bn254 "github.com/consensys/gnark-crypto/ecc/bn254/fr/mimc"
+	"github.com/consensys/gnark-crypto/hash"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/hash/mimc"
 	"github.com/consensys/gnark/test"
 )
 
-type merkleCircuit struct {
-	RootHash     frontend.Variable `gnark:",public"`
-	Path, Helper []frontend.Variable
+// MerkleProofTest used for testing only
+type MerkleProofTest struct {
+	M    MerkleProof
+	Leaf frontend.Variable
 }
 
-func (circuit *merkleCircuit) Define(api frontend.API) error {
-	hFunc, err := mimc.NewMiMC(api)
+func (mp *MerkleProofTest) Define(api frontend.API) error {
+
+	h, err := mimc.NewMiMC(api)
 	if err != nil {
 		return err
 	}
-	VerifyProof(api, hFunc, circuit.RootHash, circuit.Path, circuit.Helper)
+	mp.M.VerifyProof(api, &h, mp.Leaf)
+
 	return nil
 }
 
 func TestVerify(t *testing.T) {
 
-	// generate random data
-	// makes sure that each chunk of 64 bits fits in a fr modulus, otherwise there are bugs due to the padding (domain separation)
-	// TODO since when using mimc the user should be aware of this fact (otherwise one can easily finds collision), I am not sure we should take care of that in the code
-	var buf bytes.Buffer
-	for i := 0; i < 10; i++ {
-		var leaf fr.Element
-		if _, err := leaf.SetRandom(); err != nil {
-			t.Fatal(err)
-		}
-		b := leaf.Bytes()
-		buf.Write(b[:])
-	}
-
-	// build & verify proof for an elmt in the file
-	proofIndex := uint64(0)
-	segmentSize := 32
-	merkleRoot, proof, numLeaves, err := merkletree.BuildReaderProof(&buf, bn254.NewMiMC(), segmentSize, proofIndex)
-	if err != nil {
-		t.Fatal(err)
-		os.Exit(-1)
-	}
-	proofHelper := GenerateProofHelper(proof, proofIndex, numLeaves)
-
-	verified := merkletree.VerifyProof(bn254.NewMiMC(), merkleRoot, proof, proofIndex, numLeaves)
-	if !verified {
-		t.Fatal("The merkle proof in plain go should pass")
-	}
-
-	// create cs
-	circuit := merkleCircuit{
-		Path:   make([]frontend.Variable, len(proof)),
-		Helper: make([]frontend.Variable, len(proof)-1),
-	}
-
-	witness := merkleCircuit{
-		Path:     make([]frontend.Variable, len(proof)),
-		Helper:   make([]frontend.Variable, len(proof)-1),
-		RootHash: (merkleRoot),
-	}
-
-	for i := 0; i < len(proof); i++ {
-		witness.Path[i] = (proof[i])
-	}
-	for i := 0; i < len(proof)-1; i++ {
-		witness.Helper[i] = (proofHelper[i])
-	}
-
 	assert := test.NewAssert(t)
-	assert.ProverSucceeded(&circuit, &witness, test.WithCurves(ecc.BN254))
+	numLeaves := 32
+	depth := 5
+
+	type testData struct {
+		hash        hash.Hash
+		segmentSize int
+		curve       ecc.ID
+	}
+
+	confs := []testData{
+		{hash.MIMC_BN254, 32, ecc.BN254},
+	}
+
+	for _, tData := range confs {
+
+		// create the circuit
+		var circuit MerkleProofTest
+		circuit.M.Path = make([]frontend.Variable, depth+1)
+
+		mod := tData.curve.ScalarField()
+		modNbBytes := len(mod.Bytes())
+
+		// we test the circuit for all leaves...
+		for proofIndex := uint64(0); proofIndex < 32; proofIndex++ {
+
+			// generate random data, the Merkle tree will be of depth log(64) = 6
+			var buf bytes.Buffer
+			for i := 0; i < numLeaves; i++ {
+				leaf, err := rand.Int(rand.Reader, mod)
+				assert.NoError(err)
+				b := leaf.Bytes()
+				buf.Write(make([]byte, modNbBytes-len(b)))
+				buf.Write(b)
+			}
+
+			// create the proof using the go code
+			hGo := tData.hash.New()
+			merkleRoot, proofPath, numLeaves, err := merkletree.BuildReaderProof(&buf, hGo, tData.segmentSize, proofIndex)
+			if err != nil {
+				t.Fatal(err)
+				os.Exit(-1)
+			}
+
+			// verify the proof in plain go
+			verified := merkletree.VerifyProof(hGo, merkleRoot, proofPath, proofIndex, numLeaves)
+			if !verified {
+				t.Fatal("The merkle proof in plain go should pass")
+			}
+
+			// witness
+			var witness MerkleProofTest
+			witness.Leaf = proofIndex
+			witness.M.RootHash = merkleRoot
+			witness.M.Path = make([]frontend.Variable, depth+1)
+			for i := 0; i < depth+1; i++ {
+				witness.M.Path[i] = proofPath[i]
+			}
+
+			// verify the circuit
+			if proofIndex > 1 {
+				assert.CheckCircuit(&circuit, test.WithValidAssignment(&witness), test.WithCurves(tData.curve), test.NoProverChecks())
+			} else {
+				assert.CheckCircuit(&circuit, test.WithValidAssignment(&witness), test.WithCurves(tData.curve))
+			}
+
+		}
+
+	}
+
 }

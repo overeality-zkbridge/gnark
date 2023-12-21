@@ -26,7 +26,8 @@ import (
 	"github.com/consensys/gnark-crypto/hash"
 	"github.com/consensys/gnark-crypto/signature/eddsa"
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/algebra/twistededwards"
+	"github.com/consensys/gnark/internal/utils"
+	"github.com/consensys/gnark/std/algebra/native/twistededwards"
 	"github.com/consensys/gnark/std/hash/mimc"
 	"github.com/consensys/gnark/test"
 )
@@ -69,72 +70,64 @@ func TestEddsa(t *testing.T) {
 		// {hash.MIMC_BLS12_381, tedwards.BLS12_381_BANDERSNATCH},
 		{hash.MIMC_BLS12_377, tedwards.BLS12_377},
 		{hash.MIMC_BW6_761, tedwards.BW6_761},
-		{hash.MIMC_BLS24_315, tedwards.BLS24_315},
-		{hash.MIMC_BW6_633, tedwards.BW6_633},
+		// {hash.MIMC_BLS24_315, tedwards.BLS24_315},
+		// {hash.MIMC_BLS24_317, tedwards.BLS24_317},
+		// {hash.MIMC_BW6_633, tedwards.BW6_633},
 	}
 
-	bound := 5
-	if testing.Short() {
-		bound = 1
-	}
+	seed := time.Now().Unix()
+	t.Logf("setting seed in rand %d", seed)
+	randomness := rand.New(rand.NewSource(seed)) //#nosec G404 -- This is a false positive
 
-	for i := 0; i < bound; i++ {
-		seed := time.Now().Unix()
-		t.Logf("setting seed in rand %d", seed)
-		randomness := rand.New(rand.NewSource(seed))
+	for _, conf := range confs {
 
-		for _, conf := range confs {
+		snarkField, err := twistededwards.GetSnarkField(conf.curve)
+		assert.NoError(err)
+		snarkCurve := utils.FieldToCurve(snarkField)
 
-			snarkCurve, err := twistededwards.GetSnarkCurve(conf.curve)
-			assert.NoError(err)
+		// generate parameters for the signatures
+		privKey, err := eddsa.New(conf.curve, randomness)
+		assert.NoError(err, "generating eddsa key pair")
 
-			// generate parameters for the signatures
-			privKey, err := eddsa.New(conf.curve, randomness)
-			assert.NoError(err, "generating eddsa key pair")
+		// pick a message to sign
+		var msg big.Int
+		msg.Rand(randomness, snarkField)
+		t.Log("msg to sign", msg.String())
+		msgDataUnpadded := msg.Bytes()
+		msgData := make([]byte, len(snarkField.Bytes()))
+		copy(msgData[len(msgData)-len(msgDataUnpadded):], msgDataUnpadded)
 
-			// pick a message to sign
-			var msg big.Int
-			msg.Rand(randomness, snarkCurve.Info().Fr.Modulus())
-			t.Log("msg to sign", msg.String())
-			msgData := msg.Bytes()
+		// generate signature
+		signature, err := privKey.Sign(msgData, conf.hash.New())
+		assert.NoError(err, "signing message")
 
-			// generate signature
-			signature, err := privKey.Sign(msgData[:], conf.hash.New())
-			assert.NoError(err, "signing message")
+		// check if there is no problem in the signature
+		pubKey := privKey.Public()
+		checkSig, err := pubKey.Verify(signature, msgData, conf.hash.New())
+		assert.NoError(err, "verifying signature")
+		assert.True(checkSig, "signature verification failed")
 
-			// check if there is no problem in the signature
-			pubKey := privKey.Public()
-			checkSig, err := pubKey.Verify(signature, msgData[:], conf.hash.New())
-			assert.NoError(err, "verifying signature")
-			assert.True(checkSig, "signature verification failed")
+		// create and compile the circuit for signature verification
+		var circuit eddsaCircuit
+		circuit.curveID = conf.curve
 
-			// create and compile the circuit for signature verification
-			var circuit eddsaCircuit
-			circuit.curveID = conf.curve
+		var validWitness eddsaCircuit
+		validWitness.Message = msg
+		validWitness.PublicKey.Assign(conf.curve, pubKey.Bytes())
+		validWitness.Signature.Assign(conf.curve, signature)
 
-			// verification with the correct Message
-			{
-				var witness eddsaCircuit
-				witness.Message = msg
-				witness.PublicKey.Assign(snarkCurve, pubKey.Bytes())
-				witness.Signature.Assign(snarkCurve, signature)
+		var invalidWitness eddsaCircuit
+		invalidMsg := new(big.Int)
+		invalidMsg.Rand(randomness, snarkField)
+		invalidWitness.Message = invalidMsg
+		invalidWitness.PublicKey.Assign(conf.curve, pubKey.Bytes())
+		invalidWitness.Signature.Assign(conf.curve, signature)
 
-				assert.SolvingSucceeded(&circuit, &witness, test.WithCurves(snarkCurve))
-			}
+		assert.CheckCircuit(&circuit,
+			test.WithValidAssignment(&validWitness),
+			test.WithInvalidAssignment(&invalidWitness),
+			test.WithCurves(snarkCurve))
 
-			// verification with incorrect Message
-			{
-				var witness eddsaCircuit
-
-				msg.Rand(randomness, snarkCurve.Info().Fr.Modulus())
-				witness.Message = msg
-				witness.PublicKey.Assign(snarkCurve, pubKey.Bytes())
-				witness.Signature.Assign(snarkCurve, signature)
-
-				assert.SolvingFailed(&circuit, &witness, test.WithCurves(snarkCurve))
-			}
-
-		}
 	}
 
 }

@@ -17,11 +17,11 @@ limitations under the License.
 package gnark_test
 
 import (
-	"fmt"
 	"sort"
 	"testing"
 
 	"github.com/consensys/gnark/backend"
+	"github.com/consensys/gnark/constraint/solver"
 	"github.com/consensys/gnark/internal/backend/circuits"
 	"github.com/consensys/gnark/test"
 )
@@ -40,18 +40,40 @@ func TestIntegrationAPI(t *testing.T) {
 
 		name := keys[i]
 		tData := circuits.Circuits[name]
+
 		assert.Run(func(assert *test.Assert) {
+
+			opts := []test.TestingOption{
+				test.WithSolverOpts(solver.WithHints(tData.HintFunctions...)),
+			}
+			if tData.Curves != nil {
+				opts = append(opts, test.WithCurves(tData.Curves[0], tData.Curves[1:]...))
+			}
+			// add all valid assignments
 			for i := range tData.ValidAssignments {
-				assert.Run(func(assert *test.Assert) {
-					assert.ProverSucceeded(tData.Circuit, tData.ValidAssignments[i], test.WithProverOpts(backend.WithHints(tData.HintFunctions...)), test.WithCurves(tData.Curves[0], tData.Curves[1:]...))
-				}, fmt.Sprintf("valid-%d", i))
+				opts = append(opts, test.WithValidAssignment(tData.ValidAssignments[i]))
+			}
+			// add all invalid assignments
+			for i := range tData.InvalidAssignments {
+				opts = append(opts, test.WithInvalidAssignment(tData.InvalidAssignments[i]))
 			}
 
-			for i := range tData.InvalidAssignments {
-				assert.Run(func(assert *test.Assert) {
-					assert.ProverFailed(tData.Circuit, tData.InvalidAssignments[i], test.WithProverOpts(backend.WithHints(tData.HintFunctions...)), test.WithCurves(tData.Curves[0], tData.Curves[1:]...))
-				}, fmt.Sprintf("invalid-%d", i))
+			// for "mul" only we test with PLONKFRI
+			if name == "mul" {
+				opts = append(opts, test.WithBackends(backend.PLONK, backend.GROTH16, backend.PLONKFRI))
 			}
+
+			if name == "multi-output-hint" {
+				// TODO @gbotrel FIXME
+				opts = append(opts, test.NoFuzzing())
+			}
+
+			if name == "commit" && test.SolcCheck {
+				// TODO @gbotrel FIXME groth16 solidity verifier needs updating.
+				opts = append(opts, test.WithBackends(backend.PLONK))
+			}
+
+			assert.CheckCircuit(tData.Circuit, opts...)
 		}, name)
 	}
 

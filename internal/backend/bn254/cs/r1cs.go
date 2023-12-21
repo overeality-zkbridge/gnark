@@ -1712,3 +1712,4 @@ func decodeLinearExpression(bytes []byte) (compiled.LinearExpression, int) {
 	}
 	return le, offset
 }
+

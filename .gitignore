@@ -47,3 +47,12 @@ gnarkd/circuits/**
 
 # compiled sage -> python code
 *.sage.py
+
+# Jetbrains stuff
+.idea/
+
+# go workspace
+go.work
+go.work.sum
+
+examples/gbotrel/**

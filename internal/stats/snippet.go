@@ -7,10 +7,11 @@ import (
 	"github.com/consensys/gnark"
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/algebra/sw_bls12377"
-	"github.com/consensys/gnark/std/algebra/sw_bls24315"
+	"github.com/consensys/gnark/std/algebra/native/sw_bls12377"
+	"github.com/consensys/gnark/std/algebra/native/sw_bls24315"
 	"github.com/consensys/gnark/std/hash/mimc"
 	"github.com/consensys/gnark/std/math/bits"
+	"github.com/consensys/gnark/std/math/emulated"
 )
 
 var (
@@ -78,6 +79,30 @@ func initSnippets() {
 		mimc.Write(newVariable())
 		_ = mimc.Sum()
 	})
+	registerSnippet("math/emulated/secp256k1_64", func(api frontend.API, newVariable func() frontend.Variable) {
+		secp256k1, _ := emulated.NewField[emulated.Secp256k1Fp](api)
+
+		newElement := func() *emulated.Element[emulated.Secp256k1Fp] {
+			limbs := make([]frontend.Variable, emulated.Secp256k1Fp{}.NbLimbs())
+			for i := 0; i < len(limbs); i++ {
+				limbs[i] = newVariable()
+			}
+			return secp256k1.NewElement(limbs)
+		}
+
+		x13 := secp256k1.Mul(newElement(), newElement())
+		x13 = secp256k1.Mul(x13, newElement())
+		five := emulated.ValueOf[emulated.Secp256k1Fp](5)
+		fx2 := secp256k1.Mul(&five, newElement())
+		nom := secp256k1.Sub(fx2, x13)
+		denom := secp256k1.Add(newElement(), newElement())
+		denom = secp256k1.Add(denom, newElement())
+		denom = secp256k1.Add(denom, newElement())
+		free := secp256k1.Div(nom, denom)
+		res := secp256k1.Add(x13, fx2)
+		res = secp256k1.Add(res, free)
+		secp256k1.AssertIsEqual(res, newElement())
+	})
 
 	registerSnippet("pairing_bls12377", func(api frontend.API, newVariable func() frontend.Variable) {
 
@@ -85,16 +110,14 @@ func initSnippets() {
 		var dummyG2 sw_bls12377.G2Affine
 		dummyG1.X = newVariable()
 		dummyG1.Y = newVariable()
-		dummyG2.X.A0 = newVariable()
-		dummyG2.X.A1 = newVariable()
-		dummyG2.Y.A0 = newVariable()
-		dummyG2.Y.A1 = newVariable()
+		dummyG2.P.X.A0 = newVariable()
+		dummyG2.P.X.A1 = newVariable()
+		dummyG2.P.Y.A0 = newVariable()
+		dummyG2.P.Y.A1 = newVariable()
 
 		// e(psi0, -gamma)*e(-πC, -δ)*e(πA, πB)
-		resMillerLoop, _ := sw_bls12377.MillerLoop(api, []sw_bls12377.G1Affine{dummyG1}, []sw_bls12377.G2Affine{dummyG2})
+		_, _ = sw_bls12377.Pair(api, []sw_bls12377.G1Affine{dummyG1}, []sw_bls12377.G2Affine{dummyG2})
 
-		// performs the final expo
-		_ = sw_bls12377.FinalExponentiation(api, resMillerLoop)
 	}, ecc.BW6_761)
 
 	registerSnippet("pairing_bls24315", func(api frontend.API, newVariable func() frontend.Variable) {
@@ -103,20 +126,18 @@ func initSnippets() {
 		var dummyG2 sw_bls24315.G2Affine
 		dummyG1.X = newVariable()
 		dummyG1.Y = newVariable()
-		dummyG2.X.B0.A0 = newVariable()
-		dummyG2.X.B0.A1 = newVariable()
-		dummyG2.X.B1.A0 = newVariable()
-		dummyG2.X.B1.A1 = newVariable()
-		dummyG2.Y.B0.A0 = newVariable()
-		dummyG2.Y.B0.A1 = newVariable()
-		dummyG2.Y.B1.A0 = newVariable()
-		dummyG2.Y.B1.A1 = newVariable()
+		dummyG2.P.X.B0.A0 = newVariable()
+		dummyG2.P.X.B0.A1 = newVariable()
+		dummyG2.P.X.B1.A0 = newVariable()
+		dummyG2.P.X.B1.A1 = newVariable()
+		dummyG2.P.Y.B0.A0 = newVariable()
+		dummyG2.P.Y.B0.A1 = newVariable()
+		dummyG2.P.Y.B1.A0 = newVariable()
+		dummyG2.P.Y.B1.A1 = newVariable()
 
 		// e(psi0, -gamma)*e(-πC, -δ)*e(πA, πB)
-		resMillerLoop, _ := sw_bls24315.MillerLoop(api, []sw_bls24315.G1Affine{dummyG1}, []sw_bls24315.G2Affine{dummyG2})
+		_, _ = sw_bls24315.Pair(api, []sw_bls24315.G1Affine{dummyG1}, []sw_bls24315.G2Affine{dummyG2})
 
-		// performs the final expo
-		_ = sw_bls24315.FinalExponentiation(api, resMillerLoop)
 	}, ecc.BW6_633)
 
 }

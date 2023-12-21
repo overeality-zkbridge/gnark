@@ -3,7 +3,7 @@ package cs
 import (
 	"math/big"
 
-	"github.com/consensys/gnark/frontend/compiled"
+	"github.com/consensys/gnark/constraint"
 )
 
 // CoeffTable helps build a constraint system but need not be serialized after compilation
@@ -21,19 +21,19 @@ func NewCoeffTable() CoeffTable {
 		CoeffsIDsInt64: make(map[int64]int, 4),
 	}
 
-	st.Coeffs[compiled.CoeffIdZero].SetInt64(0)
-	st.Coeffs[compiled.CoeffIdOne].SetInt64(1)
-	st.Coeffs[compiled.CoeffIdTwo].SetInt64(2)
-	st.Coeffs[compiled.CoeffIdMinusOne].SetInt64(-1)
-	st.CoeffsIDsInt64[0] = compiled.CoeffIdZero
-	st.CoeffsIDsInt64[1] = compiled.CoeffIdOne
-	st.CoeffsIDsInt64[2] = compiled.CoeffIdTwo
-	st.CoeffsIDsInt64[-1] = compiled.CoeffIdMinusOne
+	st.Coeffs[constraint.CoeffIdZero].SetInt64(0)
+	st.Coeffs[constraint.CoeffIdOne].SetInt64(1)
+	st.Coeffs[constraint.CoeffIdTwo].SetInt64(2)
+	st.Coeffs[constraint.CoeffIdMinusOne].SetInt64(-1)
+	st.CoeffsIDsInt64[0] = constraint.CoeffIdZero
+	st.CoeffsIDsInt64[1] = constraint.CoeffIdOne
+	st.CoeffsIDsInt64[2] = constraint.CoeffIdTwo
+	st.CoeffsIDsInt64[-1] = constraint.CoeffIdMinusOne
 
 	return st
 }
 
-// CoeffID tries to fetch the entry where b is if it exits, otherwise appends b to
+// CoeffID tries to fetch the entry where b is if it exists, otherwise appends b to
 // the list of Coeffs and returns the corresponding entry
 func (t *CoeffTable) CoeffID(v *big.Int) int {
 

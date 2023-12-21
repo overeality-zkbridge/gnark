@@ -25,29 +25,33 @@ import (
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/witness"
-	"github.com/consensys/gnark/frontend"
-	backend_bls12377 "github.com/consensys/gnark/internal/backend/bls12-377/cs"
-	backend_bls12381 "github.com/consensys/gnark/internal/backend/bls12-381/cs"
-	backend_bls24315 "github.com/consensys/gnark/internal/backend/bls24-315/cs"
-	backend_bn254 "github.com/consensys/gnark/internal/backend/bn254/cs"
-	backend_bw6633 "github.com/consensys/gnark/internal/backend/bw6-633/cs"
-	backend_bw6761 "github.com/consensys/gnark/internal/backend/bw6-761/cs"
+	"github.com/consensys/gnark/constraint"
+	cs_bls12377 "github.com/consensys/gnark/constraint/bls12-377"
+	cs_bls12381 "github.com/consensys/gnark/constraint/bls12-381"
+	cs_bls24315 "github.com/consensys/gnark/constraint/bls24-315"
+	cs_bls24317 "github.com/consensys/gnark/constraint/bls24-317"
+	cs_bn254 "github.com/consensys/gnark/constraint/bn254"
+	cs_bw6633 "github.com/consensys/gnark/constraint/bw6-633"
+	cs_bw6761 "github.com/consensys/gnark/constraint/bw6-761"
 
-	witness_bls12377 "github.com/consensys/gnark/internal/backend/bls12-377/witness"
-	witness_bls12381 "github.com/consensys/gnark/internal/backend/bls12-381/witness"
-	witness_bls24315 "github.com/consensys/gnark/internal/backend/bls24-315/witness"
-	witness_bn254 "github.com/consensys/gnark/internal/backend/bn254/witness"
-	witness_bw6633 "github.com/consensys/gnark/internal/backend/bw6-633/witness"
-	witness_bw6761 "github.com/consensys/gnark/internal/backend/bw6-761/witness"
+	fr_bls12377 "github.com/consensys/gnark-crypto/ecc/bls12-377/fr"
+	fr_bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	fr_bls24315 "github.com/consensys/gnark-crypto/ecc/bls24-315/fr"
+	fr_bls24317 "github.com/consensys/gnark-crypto/ecc/bls24-317/fr"
+	fr_bn254 "github.com/consensys/gnark-crypto/ecc/bn254/fr"
+	fr_bw6633 "github.com/consensys/gnark-crypto/ecc/bw6-633/fr"
+	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
 
 	gnarkio "github.com/consensys/gnark/io"
 
-	groth16_bls12377 "github.com/consensys/gnark/internal/backend/bls12-377/groth16"
-	groth16_bls12381 "github.com/consensys/gnark/internal/backend/bls12-381/groth16"
-	groth16_bls24315 "github.com/consensys/gnark/internal/backend/bls24-315/groth16"
-	groth16_bn254 "github.com/consensys/gnark/internal/backend/bn254/groth16"
-	groth16_bw6633 "github.com/consensys/gnark/internal/backend/bw6-633/groth16"
-	groth16_bw6761 "github.com/consensys/gnark/internal/backend/bw6-761/groth16"
+	groth16_bls12377 "github.com/consensys/gnark/backend/groth16/bls12-377"
+	groth16_bls12381 "github.com/consensys/gnark/backend/groth16/bls12-381"
+	groth16_bls24315 "github.com/consensys/gnark/backend/groth16/bls24-315"
+	groth16_bls24317 "github.com/consensys/gnark/backend/groth16/bls24-317"
+	groth16_bn254 "github.com/consensys/gnark/backend/groth16/bn254"
+	icicle_bn254 "github.com/consensys/gnark/backend/groth16/bn254/icicle"
+	groth16_bw6633 "github.com/consensys/gnark/backend/groth16/bw6-633"
+	groth16_bw6761 "github.com/consensys/gnark/backend/groth16/bw6-761"
 )
 
 type groth16Object interface {
@@ -106,45 +110,51 @@ type VerifyingKey interface {
 }
 
 // Verify runs the groth16.Verify algorithm on provided proof with given witness
-func Verify(proof Proof, vk VerifyingKey, publicWitness *witness.Witness) error {
+func Verify(proof Proof, vk VerifyingKey, publicWitness witness.Witness, opts ...backend.VerifierOption) error {
 
 	switch _proof := proof.(type) {
 	case *groth16_bls12377.Proof:
-		w, ok := publicWitness.Vector.(*witness_bls12377.Witness)
+		w, ok := publicWitness.Vector().(fr_bls12377.Vector)
 		if !ok {
 			return witness.ErrInvalidWitness
 		}
-		return groth16_bls12377.Verify(_proof, vk.(*groth16_bls12377.VerifyingKey), *w)
+		return groth16_bls12377.Verify(_proof, vk.(*groth16_bls12377.VerifyingKey), w, opts...)
 	case *groth16_bls12381.Proof:
-		w, ok := publicWitness.Vector.(*witness_bls12381.Witness)
+		w, ok := publicWitness.Vector().(fr_bls12381.Vector)
 		if !ok {
 			return witness.ErrInvalidWitness
 		}
-		return groth16_bls12381.Verify(_proof, vk.(*groth16_bls12381.VerifyingKey), *w)
+		return groth16_bls12381.Verify(_proof, vk.(*groth16_bls12381.VerifyingKey), w, opts...)
 	case *groth16_bn254.Proof:
-		w, ok := publicWitness.Vector.(*witness_bn254.Witness)
+		w, ok := publicWitness.Vector().(fr_bn254.Vector)
 		if !ok {
 			return witness.ErrInvalidWitness
 		}
-		return groth16_bn254.Verify(_proof, vk.(*groth16_bn254.VerifyingKey), *w)
+		return groth16_bn254.Verify(_proof, vk.(*groth16_bn254.VerifyingKey), w, opts...)
 	case *groth16_bw6761.Proof:
-		w, ok := publicWitness.Vector.(*witness_bw6761.Witness)
+		w, ok := publicWitness.Vector().(fr_bw6761.Vector)
 		if !ok {
 			return witness.ErrInvalidWitness
 		}
-		return groth16_bw6761.Verify(_proof, vk.(*groth16_bw6761.VerifyingKey), *w)
+		return groth16_bw6761.Verify(_proof, vk.(*groth16_bw6761.VerifyingKey), w, opts...)
+	case *groth16_bls24317.Proof:
+		w, ok := publicWitness.Vector().(fr_bls24317.Vector)
+		if !ok {
+			return witness.ErrInvalidWitness
+		}
+		return groth16_bls24317.Verify(_proof, vk.(*groth16_bls24317.VerifyingKey), w, opts...)
 	case *groth16_bls24315.Proof:
-		w, ok := publicWitness.Vector.(*witness_bls24315.Witness)
+		w, ok := publicWitness.Vector().(fr_bls24315.Vector)
 		if !ok {
 			return witness.ErrInvalidWitness
 		}
-		return groth16_bls24315.Verify(_proof, vk.(*groth16_bls24315.VerifyingKey), *w)
+		return groth16_bls24315.Verify(_proof, vk.(*groth16_bls24315.VerifyingKey), w, opts...)
 	case *groth16_bw6633.Proof:
-		w, ok := publicWitness.Vector.(*witness_bw6633.Witness)
+		w, ok := publicWitness.Vector().(fr_bw6633.Vector)
 		if !ok {
 			return witness.ErrInvalidWitness
 		}
-		return groth16_bw6633.Verify(_proof, vk.(*groth16_bw6633.VerifyingKey), *w)
+		return groth16_bw6633.Verify(_proof, vk.(*groth16_bw6633.VerifyingKey), w, opts...)
 	default:
 		panic("unrecognized R1CS curve type")
 	}
@@ -154,54 +164,35 @@ func Verify(proof Proof, vk VerifyingKey, publicWitness *witness.Witness) error 
 //
 // if the force flag is set:
 //
-//		will executes all the prover computations, even if the witness is invalid
+//		will execute all the prover computations, even if the witness is invalid
 //	 will produce an invalid proof
 //		internally, the solution vector to the R1CS will be filled with random values which may impact benchmarking
-func Prove(r1cs frontend.CompiledConstraintSystem, pk ProvingKey, fullWitness *witness.Witness, opts ...backend.ProverOption) (Proof, error) {
-
-	// apply options
-	opt, err := backend.NewProverConfig(opts...)
-	if err != nil {
-		return nil, err
-	}
-
+func Prove(r1cs constraint.ConstraintSystem, pk ProvingKey, fullWitness witness.Witness, opts ...backend.ProverOption) (Proof, error) {
 	switch _r1cs := r1cs.(type) {
-	case *backend_bls12377.R1CS:
-		w, ok := fullWitness.Vector.(*witness_bls12377.Witness)
-		if !ok {
-			return nil, witness.ErrInvalidWitness
+	case *cs_bls12377.R1CS:
+		return groth16_bls12377.Prove(_r1cs, pk.(*groth16_bls12377.ProvingKey), fullWitness, opts...)
+
+	case *cs_bls12381.R1CS:
+		return groth16_bls12381.Prove(_r1cs, pk.(*groth16_bls12381.ProvingKey), fullWitness, opts...)
+
+	case *cs_bn254.R1CS:
+		if icicle_bn254.HasIcicle {
+			return icicle_bn254.Prove(_r1cs, pk.(*icicle_bn254.ProvingKey), fullWitness, opts...)
 		}
-		return groth16_bls12377.Prove(_r1cs, pk.(*groth16_bls12377.ProvingKey), *w, opt)
-	case *backend_bls12381.R1CS:
-		w, ok := fullWitness.Vector.(*witness_bls12381.Witness)
-		if !ok {
-			return nil, witness.ErrInvalidWitness
-		}
-		return groth16_bls12381.Prove(_r1cs, pk.(*groth16_bls12381.ProvingKey), *w, opt)
-	case *backend_bn254.R1CS:
-		w, ok := fullWitness.Vector.(*witness_bn254.Witness)
-		if !ok {
-			return nil, witness.ErrInvalidWitness
-		}
-		return groth16_bn254.Prove(_r1cs, pk.(*groth16_bn254.ProvingKey), *w, opt)
-	case *backend_bw6761.R1CS:
-		w, ok := fullWitness.Vector.(*witness_bw6761.Witness)
-		if !ok {
-			return nil, witness.ErrInvalidWitness
-		}
-		return groth16_bw6761.Prove(_r1cs, pk.(*groth16_bw6761.ProvingKey), *w, opt)
-	case *backend_bls24315.R1CS:
-		w, ok := fullWitness.Vector.(*witness_bls24315.Witness)
-		if !ok {
-			return nil, witness.ErrInvalidWitness
-		}
-		return groth16_bls24315.Prove(_r1cs, pk.(*groth16_bls24315.ProvingKey), *w, opt)
-	case *backend_bw6633.R1CS:
-		w, ok := fullWitness.Vector.(*witness_bw6633.Witness)
-		if !ok {
-			return nil, witness.ErrInvalidWitness
-		}
-		return groth16_bw6633.Prove(_r1cs, pk.(*groth16_bw6633.ProvingKey), *w, opt)
+		return groth16_bn254.Prove(_r1cs, pk.(*groth16_bn254.ProvingKey), fullWitness, opts...)
+
+	case *cs_bw6761.R1CS:
+		return groth16_bw6761.Prove(_r1cs, pk.(*groth16_bw6761.ProvingKey), fullWitness, opts...)
+
+	case *cs_bls24317.R1CS:
+		return groth16_bls24317.Prove(_r1cs, pk.(*groth16_bls24317.ProvingKey), fullWitness, opts...)
+
+	case *cs_bls24315.R1CS:
+		return groth16_bls24315.Prove(_r1cs, pk.(*groth16_bls24315.ProvingKey), fullWitness, opts...)
+
+	case *cs_bw6633.R1CS:
+		return groth16_bw6633.Prove(_r1cs, pk.(*groth16_bw6633.ProvingKey), fullWitness, opts...)
+
 	default:
 		panic("unrecognized R1CS curve type")
 	}
@@ -220,51 +211,65 @@ func ReadCircuitFromBytes(r1cs frontend.CompiledConstraintSystem, buf []byte, ma
 
 // Setup runs groth16.Setup with provided R1CS and outputs a key pair associated with the circuit.
 //
-// Note that careful consideration must be given to this step in production environment.
+// Note that careful consideration must be given to this step in a production environment.
 // groth16.Setup uses some randomness to precompute the Proving and Verifying keys. If the process
 // or machine leaks this randomness, an attacker could break the ZKP protocol.
 //
 // Two main solutions to this deployment issues are: running the Setup through a MPC (multi party computation)
 // or using a ZKP backend like PLONK where the per-circuit Setup is deterministic.
-func Setup(r1cs frontend.CompiledConstraintSystem) (ProvingKey, VerifyingKey, error) {
+func Setup(r1cs constraint.ConstraintSystem) (ProvingKey, VerifyingKey, error) {
 
 	switch _r1cs := r1cs.(type) {
-	case *backend_bls12377.R1CS:
+	case *cs_bls12377.R1CS:
 		var pk groth16_bls12377.ProvingKey
 		var vk groth16_bls12377.VerifyingKey
 		if err := groth16_bls12377.Setup(_r1cs, &pk, &vk); err != nil {
 			return nil, nil, err
 		}
 		return &pk, &vk, nil
-	case *backend_bls12381.R1CS:
+	case *cs_bls12381.R1CS:
 		var pk groth16_bls12381.ProvingKey
 		var vk groth16_bls12381.VerifyingKey
 		if err := groth16_bls12381.Setup(_r1cs, &pk, &vk); err != nil {
 			return nil, nil, err
 		}
 		return &pk, &vk, nil
-	case *backend_bn254.R1CS:
-		var pk groth16_bn254.ProvingKey
+	case *cs_bn254.R1CS:
 		var vk groth16_bn254.VerifyingKey
+		if icicle_bn254.HasIcicle {
+			var pk icicle_bn254.ProvingKey
+			if err := icicle_bn254.Setup(_r1cs, &pk, &vk); err != nil {
+				return nil, nil, err
+			}
+			return &pk, &vk, nil
+		}
+		var pk groth16_bn254.ProvingKey
 		if err := groth16_bn254.Setup(_r1cs, &pk, &vk); err != nil {
 			return nil, nil, err
 		}
 		return &pk, &vk, nil
-	case *backend_bw6761.R1CS:
+	case *cs_bw6761.R1CS:
 		var pk groth16_bw6761.ProvingKey
 		var vk groth16_bw6761.VerifyingKey
 		if err := groth16_bw6761.Setup(_r1cs, &pk, &vk); err != nil {
 			return nil, nil, err
 		}
 		return &pk, &vk, nil
-	case *backend_bls24315.R1CS:
+	case *cs_bls24317.R1CS:
+		var pk groth16_bls24317.ProvingKey
+		var vk groth16_bls24317.VerifyingKey
+		if err := groth16_bls24317.Setup(_r1cs, &pk, &vk); err != nil {
+			return nil, nil, err
+		}
+		return &pk, &vk, nil
+	case *cs_bls24315.R1CS:
 		var pk groth16_bls24315.ProvingKey
 		var vk groth16_bls24315.VerifyingKey
 		if err := groth16_bls24315.Setup(_r1cs, &pk, &vk); err != nil {
 			return nil, nil, err
 		}
 		return &pk, &vk, nil
-	case *backend_bw6633.R1CS:
+	case *cs_bw6633.R1CS:
 		var pk groth16_bw6633.ProvingKey
 		var vk groth16_bw6633.VerifyingKey
 		if err := groth16_bw6633.Setup(_r1cs, &pk, &vk); err != nil {
@@ -278,39 +283,52 @@ func Setup(r1cs frontend.CompiledConstraintSystem) (ProvingKey, VerifyingKey, er
 
 // DummySetup create a random ProvingKey with provided R1CS
 // it doesn't return a VerifyingKey and is use for benchmarking or test purposes only.
-func DummySetup(r1cs frontend.CompiledConstraintSystem) (ProvingKey, error) {
+func DummySetup(r1cs constraint.ConstraintSystem) (ProvingKey, error) {
 	switch _r1cs := r1cs.(type) {
-	case *backend_bls12377.R1CS:
+	case *cs_bls12377.R1CS:
 		var pk groth16_bls12377.ProvingKey
 		if err := groth16_bls12377.DummySetup(_r1cs, &pk); err != nil {
 			return nil, err
 		}
 		return &pk, nil
-	case *backend_bls12381.R1CS:
+	case *cs_bls12381.R1CS:
 		var pk groth16_bls12381.ProvingKey
 		if err := groth16_bls12381.DummySetup(_r1cs, &pk); err != nil {
 			return nil, err
 		}
 		return &pk, nil
-	case *backend_bn254.R1CS:
+	case *cs_bn254.R1CS:
+		if icicle_bn254.HasIcicle {
+			var pk icicle_bn254.ProvingKey
+			if err := icicle_bn254.DummySetup(_r1cs, &pk); err != nil {
+				return nil, err
+			}
+			return &pk, nil
+		}
 		var pk groth16_bn254.ProvingKey
 		if err := groth16_bn254.DummySetup(_r1cs, &pk); err != nil {
 			return nil, err
 		}
 		return &pk, nil
-	case *backend_bw6761.R1CS:
+	case *cs_bw6761.R1CS:
 		var pk groth16_bw6761.ProvingKey
 		if err := groth16_bw6761.DummySetup(_r1cs, &pk); err != nil {
 			return nil, err
 		}
 		return &pk, nil
-	case *backend_bls24315.R1CS:
+	case *cs_bls24317.R1CS:
+		var pk groth16_bls24317.ProvingKey
+		if err := groth16_bls24317.DummySetup(_r1cs, &pk); err != nil {
+			return nil, err
+		}
+		return &pk, nil
+	case *cs_bls24315.R1CS:
 		var pk groth16_bls24315.ProvingKey
 		if err := groth16_bls24315.DummySetup(_r1cs, &pk); err != nil {
 			return nil, err
 		}
 		return &pk, nil
-	case *backend_bw6633.R1CS:
+	case *cs_bw6633.R1CS:
 		var pk groth16_bw6633.ProvingKey
 		if err := groth16_bw6633.DummySetup(_r1cs, &pk); err != nil {
 			return nil, err
@@ -328,12 +346,17 @@ func NewProvingKey(curveID ecc.ID) ProvingKey {
 	switch curveID {
 	case ecc.BN254:
 		pk = &groth16_bn254.ProvingKey{}
+		if icicle_bn254.HasIcicle {
+			pk = &icicle_bn254.ProvingKey{}
+		}
 	case ecc.BLS12_377:
 		pk = &groth16_bls12377.ProvingKey{}
 	case ecc.BLS12_381:
 		pk = &groth16_bls12381.ProvingKey{}
 	case ecc.BW6_761:
 		pk = &groth16_bw6761.ProvingKey{}
+	case ecc.BLS24_317:
+		pk = &groth16_bls24317.ProvingKey{}
 	case ecc.BLS24_315:
 		pk = &groth16_bls24315.ProvingKey{}
 	case ecc.BW6_633:
@@ -357,6 +380,8 @@ func NewVerifyingKey(curveID ecc.ID) VerifyingKey {
 		vk = &groth16_bls12381.VerifyingKey{}
 	case ecc.BW6_761:
 		vk = &groth16_bw6761.VerifyingKey{}
+	case ecc.BLS24_317:
+		vk = &groth16_bls24317.VerifyingKey{}
 	case ecc.BLS24_315:
 		vk = &groth16_bls24315.VerifyingKey{}
 	case ecc.BW6_633:
@@ -381,6 +406,8 @@ func NewProof(curveID ecc.ID) Proof {
 		proof = &groth16_bls12381.Proof{}
 	case ecc.BW6_761:
 		proof = &groth16_bw6761.Proof{}
+	case ecc.BLS24_317:
+		proof = &groth16_bls24317.Proof{}
 	case ecc.BLS24_315:
 		proof = &groth16_bls24315.Proof{}
 	case ecc.BW6_633:
@@ -394,21 +421,23 @@ func NewProof(curveID ecc.ID) Proof {
 
 // NewCS instantiate a concrete curved-typed R1CS and return a R1CS interface
 // This method exists for (de)serialization purposes
-func NewCS(curveID ecc.ID) frontend.CompiledConstraintSystem {
-	var r1cs frontend.CompiledConstraintSystem
+func NewCS(curveID ecc.ID) constraint.ConstraintSystem {
+	var r1cs constraint.ConstraintSystem
 	switch curveID {
 	case ecc.BN254:
-		r1cs = &backend_bn254.R1CS{}
+		r1cs = &cs_bn254.R1CS{}
 	case ecc.BLS12_377:
-		r1cs = &backend_bls12377.R1CS{}
+		r1cs = &cs_bls12377.R1CS{}
 	case ecc.BLS12_381:
-		r1cs = &backend_bls12381.R1CS{}
+		r1cs = &cs_bls12381.R1CS{}
 	case ecc.BW6_761:
-		r1cs = &backend_bw6761.R1CS{}
+		r1cs = &cs_bw6761.R1CS{}
+	case ecc.BLS24_317:
+		r1cs = &cs_bls24317.R1CS{}
 	case ecc.BLS24_315:
-		r1cs = &backend_bls24315.R1CS{}
+		r1cs = &cs_bls24315.R1CS{}
 	case ecc.BW6_633:
-		r1cs = &backend_bw6633.R1CS{}
+		r1cs = &cs_bw6633.R1CS{}
 	default:
 		panic("not implemented")
 	}

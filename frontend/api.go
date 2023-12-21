@@ -19,9 +19,7 @@ package frontend
 import (
 	"math/big"
 
-	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark/backend"
-	"github.com/consensys/gnark/backend/hint"
+	"github.com/consensys/gnark/constraint/solver"
 )
 
 // API represents the available functions to circuit developers
@@ -31,6 +29,18 @@ type API interface {
 
 	// Add returns res = i1+i2+...in
 	Add(i1, i2 Variable, in ...Variable) Variable
+
+	// MulAcc sets and return a = a + (b*c).
+	//
+	// ! The method may mutate a without allocating a new result. If the input
+	// is used elsewhere, then first initialize new variable, for example by
+	// doing:
+	//
+	//     acopy := api.Mul(a, 1)
+	//     acopy = MulAcc(acopy, b, c)
+	//
+	// ! But it may not modify a, always use MulAcc(...) result for correctness.
+	MulAcc(a, b, c Variable) Variable
 
 	// Neg returns -i
 	Neg(i1 Variable) Variable
@@ -58,7 +68,7 @@ type API interface {
 	// n is the number of bits to select (starting from lsb)
 	// n default value is fr.Bits the number of bits needed to represent a field element
 	//
-	// The result in in little endian (first bit= lsb)
+	// The result in little endian (first bit= lsb)
 	ToBinary(i1 Variable, n ...int) []Variable
 
 	// FromBinary packs b, seen as a fr.Element in little endian
@@ -90,9 +100,14 @@ type API interface {
 	// IsZero returns 1 if a is zero, 0 otherwise
 	IsZero(i1 Variable) Variable
 
-	CheckZero(i1 Variable) Variable
-
-	// Cmp returns 1 if i1>i2, 0 if i1=i2, -1 if i1<i2
+	// Cmp returns:
+	//  * 1 if i1>i2,
+	//  * 0 if i1=i2,
+	//  * -1 if i1<i2.
+	//
+	// If the absolute difference between the variables i1 and i2 is known, then
+	// it is more efficient to use the bounded methdods in package
+	// [github.com/consensys/gnark/std/math/bits].
 	Cmp(i1, i2 Variable) Variable
 
 	// ---------------------------------------------------------------------------------------------
@@ -104,10 +119,16 @@ type API interface {
 	// AssertIsDifferent fails if i1 == i2
 	AssertIsDifferent(i1, i2 Variable)
 
-	// AssertIsBoolean fails if v != 0 ∥ v != 1
+	// AssertIsBoolean fails if v != 0 and v != 1
 	AssertIsBoolean(i1 Variable)
+	// AssertIsCrumb fails if v ∉ {0,1,2,3} (crumb is a 2-bit variable; see https://en.wikipedia.org/wiki/Units_of_information)
+	AssertIsCrumb(i1 Variable)
 
-	// AssertIsLessOrEqual fails if  v > bound
+	// AssertIsLessOrEqual fails if v > bound.
+	//
+	// If the absolute difference between the variables b and bound is known, then
+	// it is more efficient to use the bounded methdods in package
+	// [github.com/consensys/gnark/std/math/bits].
 	AssertIsLessOrEqual(v Variable, bound Variable)
 
 	// Println behaves like fmt.Println but accepts cd.Variable as parameter
@@ -119,27 +140,24 @@ type API interface {
 
 	// Deprecated APIs
 
-	// NewHint is a shorcut to api.Compiler().NewHint()
+	// NewHint is a shortcut to api.Compiler().NewHint()
 	// Deprecated: use api.Compiler().NewHint() instead
-	NewHint(f hint.Function, nbOutputs int, inputs ...Variable) ([]Variable, error)
+	NewHint(f solver.Hint, nbOutputs int, inputs ...Variable) ([]Variable, error)
 
-	// Tag is a shorcut to api.Compiler().Tag()
-	// Deprecated: use api.Compiler().Tag() instead
-	Tag(name string) Tag
-
-	// AddCounter is a shorcut to api.Compiler().AddCounter()
-	// Deprecated: use api.Compiler().AddCounter() instead
-	AddCounter(from, to Tag)
-
-	// ConstantValue is a shorcut to api.Compiler().ConstantValue()
+	// ConstantValue is a shortcut to api.Compiler().ConstantValue()
 	// Deprecated: use api.Compiler().ConstantValue() instead
 	ConstantValue(v Variable) (*big.Int, bool)
+}
 
-	// Curve is a shorcut to api.Compiler().Curve()
-	// Deprecated: use api.Compiler().Curve() instead
-	Curve() ecc.ID
+// BatchInvert returns a slice of variables containing the inverse of each element in i1
+// This is a temporary API, do not use it in your circuit
+type BatchInverter interface {
+	// BatchInvert returns a slice of variables containing the inverse of each element in i1
+	// This is a temporary API, do not use it in your circuit
+	BatchInvert(i1 []Variable) []Variable
+}
 
-	// Backend is a shorcut to api.Compiler().Backend()
-	// Deprecated: use api.Compiler().Backend() instead
-	Backend() backend.ID
+type PlonkAPI interface {
+	// EvaluatePlonkExpression returns res = qL.a + qR.b + qM.ab + qC
+	EvaluatePlonkExpression(a, b Variable, qL, qR, qM, qC int) Variable
 }
