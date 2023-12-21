@@ -198,17 +198,6 @@ func Prove(r1cs constraint.ConstraintSystem, pk ProvingKey, fullWitness witness.
 	}
 }
 
-func ReadFromBytes(pk ProvingKey, buf []byte, maxConcurrency int) (int64, error) {
-	return groth16_bn254.ReadFromBytes(pk.(*groth16_bn254.ProvingKey), buf, maxConcurrency)
-}
-
-type CircuitOffsets interface {
-}
-
-func ReadCircuitFromBytes(r1cs frontend.CompiledConstraintSystem, buf []byte, maxConcurrency int, releaseFlag bool, offsetFile string) (int64, error) {
-	return backend_bn254.ReadCircuitFromBytes(r1cs.(*backend_bn254.R1CS), buf, maxConcurrency, releaseFlag, offsetFile)
-}
-
 // Setup runs groth16.Setup with provided R1CS and outputs a key pair associated with the circuit.
 //
 // Note that careful consideration must be given to this step in a production environment.
