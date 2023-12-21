@@ -370,56 +370,64 @@ func (builder *builder) FromBinary(_b ...frontend.Variable) frontend.Variable {
 }
 
 // Xor compute the XOR between two frontend.Variables
-func (system *r1cs) Xor(_a, _b frontend.Variable) frontend.Variable {
+func (builder *builder) Xor(_a, _b frontend.Variable) frontend.Variable {
 
 	vars, _ := builder.toVariables(_a, _b)
 
 	a := vars[0]
 	b := vars[1]
 
-	system.AssertIsBoolean(a)
-	system.AssertIsBoolean(b)
+	builder.AssertIsBoolean(a)
+	builder.AssertIsBoolean(b)
 
-	// the formulation used is for easing up the conversion to sparse r1cs
-	res := system.newInternalVariable()
-	system.MarkBoolean(res)
-	c := system.Neg(res).(compiled.LinearExpression)
-	c = append(c, a[0], b[0])
-	aa := system.Mul(a, 2)
-	system.Constraints = append(system.Constraints, newR1C(aa, b, c))
+	// instead of writing a + b - 2ab
+	// we do a * (1 - 2b) + b
+	// to limit large linear expressions
+
+	// moreover, we ensure than b is as small as possible, so that the result
+	// is bounded by len(min(a, b)) + 1
+	if len(b) > len(a) {
+		a, b = b, a
+	}
+	t := builder.Sub(builder.cstOne(), builder.Mul(b, 2))
+	t = builder.Add(builder.Mul(a, t), b)
+
+	builder.MarkBoolean(t)
 
 	return t
 }
 
 // Or compute the OR between two frontend.Variables
-func (system *r1cs) Or(_a, _b frontend.Variable) frontend.Variable {
-	vars, _ := system.toVariables(_a, _b)
+func (builder *builder) Or(_a, _b frontend.Variable) frontend.Variable {
+	vars, _ := builder.toVariables(_a, _b)
 
 	a := vars[0]
 	b := vars[1]
 
-	system.AssertIsBoolean(a)
-	system.AssertIsBoolean(b)
+	builder.AssertIsBoolean(a)
+	builder.AssertIsBoolean(b)
 
 	// the formulation used is for easing up the conversion to sparse r1cs
-	res := system.newInternalVariable()
-	system.MarkBoolean(res)
-	c := system.Neg(res).(compiled.LinearExpression)
-	c = append(c, a[0], b[0])
-	system.Constraints = append(system.Constraints, newR1C(a, b, c))
+	res := builder.newInternalVariable()
+	builder.MarkBoolean(res)
+	c := builder.Neg(res).(expr.LinearExpression)
+
+	c = append(c, a...)
+	c = append(c, b...)
+	builder.cs.AddR1C(builder.newR1C(a, b, c), builder.genericGate)
 
 	return res
 }
 
 // And compute the AND between two frontend.Variables
-func (system *r1cs) And(_a, _b frontend.Variable) frontend.Variable {
-	vars, _ := system.toVariables(_a, _b)
+func (builder *builder) And(_a, _b frontend.Variable) frontend.Variable {
+	vars, _ := builder.toVariables(_a, _b)
 
 	a := vars[0]
 	b := vars[1]
 
-	system.AssertIsBoolean(a)
-	system.AssertIsBoolean(b)
+	builder.AssertIsBoolean(a)
+	builder.AssertIsBoolean(b)
 
 	res := builder.Mul(a, b)
 	builder.MarkBoolean(res)
@@ -557,30 +565,6 @@ func (builder *builder) IsZero(i1 frontend.Variable) frontend.Variable {
 
 	builder.cs.AttachDebugInfo(debug, []int{c1, c2})
 
-	return m
-}
-
-// IsZero returns 1 if i1 is zero, 0 otherwise
-func (system *r1cs) CheckZero(i1 frontend.Variable) frontend.Variable {
-	vars, _ := system.toVariables(i1)
-	a := vars[0]
-	if c, ok := system.ConstantValue(a); ok {
-		if c.IsUint64() && c.Uint64() == 0 {
-			return system.toVariable(1)
-		}
-		return system.toVariable(0)
-	}
-
-	debug := system.AddDebugInfo("CheckZero", a)
-
-	res, err := system.NewHint(hint.CheckZero, 1, a)
-	if err != nil {
-		// the function errs only if the number of inputs is invalid.
-		panic(err)
-	}
-	m := res[0]
-	system.addConstraint(newR1C(a, m, a), debug)
-	system.AssertIsBoolean(m)
 	return m
 }
 
