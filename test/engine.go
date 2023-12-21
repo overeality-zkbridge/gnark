@@ -373,7 +373,7 @@ func (e *engine) FromBinary(v ...frontend.Variable) frontend.Variable {
 	return r
 }
 
-func (e *engine) Xor(i1, i2 frontend.Variable, _ ...frontend.ApiOption) frontend.Variable {
+func (e *engine) Xor(i1, i2 frontend.Variable) frontend.Variable {
 	b1, b2 := e.toBigInt(i1), e.toBigInt(i2)
 	e.mustBeBoolean(b1)
 	e.mustBeBoolean(b2)
@@ -382,7 +382,7 @@ func (e *engine) Xor(i1, i2 frontend.Variable, _ ...frontend.ApiOption) frontend
 	return res
 }
 
-func (e *engine) Or(i1, i2 frontend.Variable, _ ...frontend.ApiOption) frontend.Variable {
+func (e *engine) Or(i1, i2 frontend.Variable) frontend.Variable {
 	b1, b2 := e.toBigInt(i1), e.toBigInt(i2)
 	e.mustBeBoolean(b1)
 	e.mustBeBoolean(b2)
@@ -391,7 +391,7 @@ func (e *engine) Or(i1, i2 frontend.Variable, _ ...frontend.ApiOption) frontend.
 	return res
 }
 
-func (e *engine) And(i1, i2 frontend.Variable, _ ...frontend.ApiOption) frontend.Variable {
+func (e *engine) And(i1, i2 frontend.Variable) frontend.Variable {
 	b1, b2 := e.toBigInt(i1), e.toBigInt(i2)
 	e.mustBeBoolean(b1)
 	e.mustBeBoolean(b2)
@@ -433,17 +433,6 @@ func (e *engine) IsZero(i1 frontend.Variable) frontend.Variable {
 	}
 
 	return big.NewInt(0)
-}
-
-// IsZero returns 1 if a is zero, 0 otherwise
-func (e *engine) CheckZero(i1 frontend.Variable) frontend.Variable {
-	b1 := e.toBigInt(i1)
-
-	if b1.IsUint64() && b1.Uint64() == 0 {
-		return 0
-	}
-
-	return (1)
 }
 
 // Cmp returns 1 if i1>i2, 0 if i1==i2, -1 if i1<i2
