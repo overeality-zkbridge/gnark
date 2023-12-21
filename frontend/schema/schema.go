@@ -231,8 +231,8 @@ func parse(r []Field, input interface{}, target reflect.Type, parentFullName, pa
 				continue // skipping "-"
 			}
 
-		// default visibility is Unset
-		visibility := Unset
+			// default visibility is Unset
+			visibility := Unset
 
 			// variable name is field name, unless overridden by gnark tag value
 			name := f.Name
@@ -277,10 +277,10 @@ func parse(r []Field, input interface{}, target reflect.Type, parentFullName, pa
 				return r, fmt.Errorf("conflicting visibility. %s (%s) has a parent with different visibility attribute", getFullName(parentGoName, name, nameTag), visibility.String())
 			}
 
-		// inherit parent visibility
-		if visibility == Unset {
-			visibility = parentVisibility
-		}
+			// inherit parent visibility
+			if visibility == Unset {
+				visibility = parentVisibility
+			}
 
 			fValue := tValue.FieldByIndex(f.Index)
 
@@ -297,68 +297,26 @@ func parse(r []Field, input interface{}, target reflect.Type, parentFullName, pa
 			}
 		}
 
-	if parentGoName == "" {
-		// root
-		return subFields, nil
-	}
-	// we just add it to our current fields
-	// if parentVisibility == Unset {
-	// 	parentVisibility = Secret // default visibility to Secret
-	// }
-	if len(subFields) == 0 {
-		// nothing to add in the schema
-		return r, nil
-	}
-	return append(r, Field{
-		Name:       parentGoName,
-		NameTag:    parentTagName,
-		Type:       Struct,
-		SubFields:  subFields,
-		Visibility: parentVisibility, // == Secret,
-	}), nil
-
-}
-
-// parentFullName: the name of parent with its ancestors separated by "_"
-// parentGoName: the name of parent (Go struct definition)
-// parentTagName: may be empty, set if a struct tag with name is set
-func parse(r []Field, input interface{}, target reflect.Type, parentFullName, parentGoName, parentTagName string, parentVisibility Visibility, handler LeafHandler, nbPublic, nbSecret *int) ([]Field, error) {
-	tValue := reflect.ValueOf(input)
-
-	// get pointed value if needed
-	if tValue.Kind() == reflect.Ptr {
-		tValue = tValue.Elem()
-	}
-
-	// stop condition
-	if tValue.Type() == target {
-		v := parentVisibility
-		if v == Unset {
-			v = Secret
-		}
-		if v == Secret {
-			(*nbSecret)++
-		} else if v == Public {
-			(*nbPublic)++
-		}
-
-		if handler != nil {
-			if err := handler(v, parentFullName, tValue); err != nil {
-				return nil, err
-			}
+		if parentGoName == "" {
+			// root
+			return subFields, nil
 		}
 		// we just add it to our current fields
+		// if parentVisibility == Unset {
+		// 	parentVisibility = Secret // default visibility to Secret
+		// }
+		if len(subFields) == 0 {
+			// nothing to add in the schema
+			return r, nil
+		}
 		return append(r, Field{
 			Name:       parentGoName,
 			NameTag:    parentTagName,
-			Type:       Leaf,
-			Visibility: v,
+			Type:       Struct,
+			SubFields:  subFields,
+			Visibility: parentVisibility, // == Secret,
 		}), nil
-	}
 
-	// struct
-	if tValue.Kind() == reflect.Struct {
-		return parseStruct(r, tValue, target, parentFullName, parentGoName, parentTagName, parentVisibility, handler, nbPublic, nbSecret)
 	}
 
 	if tValue.Kind() == reflect.Slice || tValue.Kind() == reflect.Array {
@@ -400,22 +358,8 @@ func parse(r []Field, input interface{}, target reflect.Type, parentFullName, pa
 		var subFields []Field
 		var err error
 		for j := 0; j < tValue.Len(); j++ {
-			// fmt.Println("enter 1")
 			val := tValue.Index(j)
-			for val.Kind() == reflect.Ptr || val.Kind() == reflect.Interface {
-				val = val.Elem()
-			}
-			// fmt.Println(val.Kind())
-			if val.Kind() == reflect.Struct {
-				// fmt.Println("enter 2 ")
-				// we have a subcircuit
-				fqn := getFullName(parentFullName, strconv.Itoa(j), "")
-				subFields, err = parseStruct(subFields, val, target, fqn, fqn, parentTagName, parentVisibility, handler, nbPublic, nbSecret)
-				if err != nil {
-					return nil, err
-				}
-				// fmt.Println(subFields)
-			} else if val.CanAddr() && val.Addr().CanInterface() {
+			if val.CanAddr() && val.Addr().CanInterface() {
 				fqn := getFullName(parentFullName, strconv.Itoa(j), "")
 				ival := val.Addr().Interface()
 				if ih, hasInitHook := ival.(InitHook); hasInitHook {
