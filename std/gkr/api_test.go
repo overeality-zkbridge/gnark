@@ -371,7 +371,7 @@ func (c *benchMiMCMerkleTreeCircuit) Define(api frontend.API) error {
 	}
 	Z := solution.Export(z)
 
-	challenge, err := api.Compiler().(frontend.Committer).Commit(Z...)
+	challenge, err := api.(frontend.Committer).Commit(Z...)
 	if err != nil {
 		return err
 	}
@@ -427,7 +427,9 @@ func testPlonk(t *testing.T, circuit, assignment frontend.Circuit) {
 }
 
 func registerMiMC() {
-	bn254r1cs.RegisterHashBuilder("mimc", bn254MiMC.NewMiMC)
+	bn254r1cs.RegisterHashBuilder("mimc", func() hash.Hash {
+		return bn254MiMC.NewMiMC()
+	})
 	stdHash.Register("mimc", func(api frontend.API) (stdHash.FieldHasher, error) {
 		m, err := mimc.NewMiMC(api)
 		return &m, err
@@ -560,6 +562,7 @@ type mimcNoDepCircuit struct {
 	X         []frontend.Variable
 	Y         []frontend.Variable
 	mimcDepth int
+	hashName  string
 }
 
 func (c *mimcNoDepCircuit) Define(api frontend.API) error {
@@ -592,10 +595,10 @@ func (c *mimcNoDepCircuit) Define(api frontend.API) error {
 		return err
 	}
 	Z := solution.Export(z)
-	return solution.Verify("-20", Z...)
+	return solution.Verify(c.hashName, Z...)
 }
 
-func mimcNoDepCircuits(mimcDepth, nbInstances int) (circuit, assignment frontend.Circuit) {
+func mimcNoDepCircuits(mimcDepth, nbInstances int, hashName string) (circuit, assignment frontend.Circuit) {
 	X := make([]frontend.Variable, nbInstances)
 	Y := make([]frontend.Variable, nbInstances)
 	for i := range X {
@@ -610,23 +613,24 @@ func mimcNoDepCircuits(mimcDepth, nbInstances int) (circuit, assignment frontend
 		X:         make([]frontend.Variable, nbInstances),
 		Y:         make([]frontend.Variable, nbInstances),
 		mimcDepth: mimcDepth,
+		hashName:  hashName,
 	}
 	return
 }
 
 func BenchmarkMiMCNoDepSolve(b *testing.B) {
 	//defer profile.Start().Stop()
-	circuit, assignment := mimcNoDepCircuits(1, 1<<9)
+	circuit, assignment := mimcNoDepCircuits(1, 1<<9, "-20")
 	benchProof(b, circuit, assignment)
 }
 
 func BenchmarkMiMCFullDepthNoDepSolve(b *testing.B) {
-	circuit, assignment := mimcNoDepCircuits(91, 1<<19)
+	circuit, assignment := mimcNoDepCircuits(91, 1<<19, "-20")
 	benchProof(b, circuit, assignment)
 }
 
 func BenchmarkMiMCFullDepthNoDepCompile(b *testing.B) {
-	circuit, _ := mimcNoDepCircuits(91, 1<<17)
+	circuit, _ := mimcNoDepCircuits(91, 1<<17, "-20")
 	benchCompile(b, circuit)
 }
 
@@ -638,10 +642,17 @@ func BenchmarkMiMCNoGkrFullDepthSolve(b *testing.B) {
 func TestMiMCFullDepthNoDepSolve(t *testing.T) {
 	registerMiMC()
 	for i := 0; i < 100; i++ {
-		circuit, assignment := mimcNoDepCircuits(5, 1<<2)
+		circuit, assignment := mimcNoDepCircuits(5, 1<<2, "-20")
 		testGroth16(t, circuit, assignment)
 		testPlonk(t, circuit, assignment)
 	}
+}
+
+func TestMiMCFullDepthNoDepSolveWithMiMCHash(t *testing.T) {
+	registerMiMC()
+	circuit, assignment := mimcNoDepCircuits(5, 1<<2, "mimc")
+	testGroth16(t, circuit, assignment)
+	testPlonk(t, circuit, assignment)
 }
 
 func mimcNoGkrCircuits(mimcDepth, nbInstances int) (circuit, assignment frontend.Circuit) {
