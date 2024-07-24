@@ -17,6 +17,7 @@
 package cs
 
 import (
+	"fmt"
 	"github.com/fxamacker/cbor/v2"
 	"io"
 	"time"
@@ -156,9 +157,138 @@ func (cs *system) WriteTo(w io.Writer) (int64, error) {
 	encoder := enc.NewEncoder(&_w)
 
 	// encode our object
-	err = encoder.Encode(cs)
+	//err = encoder.Encode(cs)
+
+	t0 := time.Now()
+
+	err = encoder.Encode(cs.GnarkVersion)
+	if err != nil {
+		return _w.N, err
+	}
+
+	err = encoder.Encode(cs.ScalarField)
+	if err != nil {
+		return _w.N, err
+	}
+	err = encoder.Encode(cs.Type)
+	if err != nil {
+		return _w.N, err
+	}
+	t1 := time.Now()
+	fmt.Printf("Encoding Type took: %0.2fs\n", t1.Sub(t0).Seconds())
+
+	fmt.Printf("len(Instructions) =  %v\n", len(cs.Instructions))
+	err = encoder.Encode(cs.Instructions)
+	if err != nil {
+		return _w.N, err
+	}
+	t2 := time.Now()
+	fmt.Printf("Encoding Instructions took: %0.2fs\n", t2.Sub(t1).Seconds())
+
+	fmt.Printf("len(Blueprints) =  %v\n", len(cs.Blueprints))
+	err = encoder.Encode(cs.Blueprints)
+	if err != nil {
+		return _w.N, err
+	}
+	t3 := time.Now()
+	fmt.Printf("Encoding Instructions took: %0.2fs\n", t3.Sub(t2).Seconds())
+
+	fmt.Printf("len(CallData) =  %v\n", len(cs.CallData))
+	err = encoder.Encode(cs.CallData)
+	if err != nil {
+		return _w.N, err
+	}
+	t4 := time.Now()
+	fmt.Printf("Encoding Instructions took: %0.2fs\n", t4.Sub(t3).Seconds())
+
+	err = encoder.Encode(cs.NbConstraints)
+	if err != nil {
+		return _w.N, err
+	}
+	err = encoder.Encode(cs.NbInternalVariables)
+	if err != nil {
+		return _w.N, err
+	}
+	err = encoder.Encode(cs.Public)
+	if err != nil {
+		return _w.N, err
+	}
+
+	t5 := time.Now()
+	fmt.Printf("Encoding Public took: %0.2fs\n", t5.Sub(t4).Seconds())
+
+	err = encoder.Encode(cs.Secret)
+	if err != nil {
+		return _w.N, err
+	}
+	t6 := time.Now()
+	fmt.Printf("Encoding Secret took: %0.2fs\n", t6.Sub(t5).Seconds())
+
+	err = encoder.Encode(cs.Logs)
+	if err != nil {
+		return _w.N, err
+	}
+	t7 := time.Now()
+	fmt.Printf("Encoding Logs took: %0.2fs\n", t7.Sub(t6).Seconds())
+
+	err = encoder.Encode(cs.DebugInfo)
+	if err != nil {
+		return _w.N, err
+	}
+	t8 := time.Now()
+	fmt.Printf("Encoding DebugInfo took: %0.2fs\n", t8.Sub(t7).Seconds())
+
+	err = encoder.Encode(cs.SymbolTable)
+	if err != nil {
+		return _w.N, err
+	}
+	t9 := time.Now()
+	fmt.Printf("Encoding SymbolTable took: %0.2fs\n", t9.Sub(t8).Seconds())
+
+	fmt.Printf("len(MDebug) =  %v\n", len(cs.MDebug))
+	err = encoder.Encode(cs.MDebug)
+	if err != nil {
+		return _w.N, err
+	}
+	t10 := time.Now()
+	fmt.Printf("Encoding MDebug took: %0.2fs\n", t10.Sub(t9).Seconds())
+
+	err = encoder.Encode(cs.MHintsDependencies)
+	if err != nil {
+		return _w.N, err
+	}
+	t11 := time.Now()
+	fmt.Printf("Encoding MHintsDependencies took: %0.2fs\n", t11.Sub(t10).Seconds())
+
+	fmt.Printf("len(Levels) =  %v\n", len(cs.Levels))
+	err = encoder.Encode(cs.Levels)
+	if err != nil {
+		return _w.N, err
+	}
+	t12 := time.Now()
+	fmt.Printf("Encoding Levels took: %0.2fs\n", t12.Sub(t11).Seconds())
+
+	err = encoder.Encode(cs.CommitmentInfo)
+	if err != nil {
+		return _w.N, err
+	}
+	t13 := time.Now()
+	fmt.Printf("Encoding CommitmentInfo took: %0.2fs\n", t13.Sub(t12).Seconds())
+
+	err = encoder.Encode(cs.GkrInfo)
+	if err != nil {
+		return _w.N, err
+	}
+	t14 := time.Now()
+	fmt.Printf("Encoding GkrInfo took: %0.2fs\n", t14.Sub(t13).Seconds())
+
+	fmt.Printf("Total took: %v\n", t14.Sub(t0))
+
 	return _w.N, err
 }
+
+// curl -X GET https://proof-cloud-server-main-6o6ru7m5aq-nw.a.run.app/api/v1/prover/list -H "Content-Type: application/json" -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MjE2MjE5NTMsImlkIjoiMTAxNzAxOTI3MzU0NDQ3Njc2NDMxIiwib3JpZ19pYXQiOjE3MjE2MTgzNTMsInN0YXR1cyI6MH0.MPWvWnx1PbSZ7IkLwsOqPvNVm-JqVpehuKD92D8uXJw"
+//
 
 // ReadFrom attempts to decode R1CS from io.Reader using cbor
 func (cs *system) ReadFrom(r io.Reader) (int64, error) {
@@ -176,9 +306,118 @@ func (cs *system) ReadFrom(r io.Reader) (int64, error) {
 	// initialize coeff table
 	cs.CoeffTable = newCoeffTable(0)
 
-	if err := decoder.Decode(&cs); err != nil {
+	//if err := decoder.Decode(&cs); err != nil {
+	//	return int64(decoder.NumBytesRead()), err
+	//}
+
+	t0 := time.Now()
+	err = decoder.Decode(&cs.GnarkVersion)
+	if err != nil {
 		return int64(decoder.NumBytesRead()), err
 	}
+	err = decoder.Decode(&cs.ScalarField)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	err = decoder.Decode(&cs.Type)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	err = decoder.Decode(&cs.Instructions)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	t1 := time.Now()
+	fmt.Printf("Decoding Instructions took: %0.2fs\n", t1.Sub(t0).Seconds())
+
+	err = decoder.Decode(&cs.Blueprints)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	t2 := time.Now()
+	fmt.Printf("Decoding Blueprints took: %0.2fs\n", t2.Sub(t1).Seconds())
+
+	err = decoder.Decode(&cs.CallData)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	t3 := time.Now()
+	fmt.Printf("Decoding CallData took: %0.2fs\n", t3.Sub(t2).Seconds())
+
+	err = decoder.Decode(&cs.NbConstraints)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	err = decoder.Decode(&cs.NbInternalVariables)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	err = decoder.Decode(&cs.Public)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	err = decoder.Decode(&cs.Secret)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	t4 := time.Now()
+	fmt.Printf("Decoding Public/Secret took: %0.2fs\n", t4.Sub(t3).Seconds())
+
+	err = decoder.Decode(&cs.Logs)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	t5 := time.Now()
+	fmt.Printf("Decoding Logs took: %0.2fs\n", t5.Sub(t4).Seconds())
+
+	err = decoder.Decode(&cs.DebugInfo)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	t6 := time.Now()
+	fmt.Printf("Decoding DebugInfo took: %0.2fs\n", t6.Sub(t5).Seconds())
+
+	err = decoder.Decode(&cs.SymbolTable)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	t7 := time.Now()
+	fmt.Printf("Decoding SymbolTable took: %0.2fs\n", t7.Sub(t6).Seconds())
+
+	err = decoder.Decode(&cs.MDebug)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	t8 := time.Now()
+	fmt.Printf("Decoding MDebug took: %0.2fs\n", t8.Sub(t7).Seconds())
+
+	err = decoder.Decode(&cs.MHintsDependencies)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	t9 := time.Now()
+	fmt.Printf("Decoding MHintsDependencies took: %0.2fs\n", t9.Sub(t8).Seconds())
+
+	err = decoder.Decode(&cs.Levels)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+	t10 := time.Now()
+	fmt.Printf("Decoding Levels took: %0.2fs\n", t10.Sub(t10).Seconds())
+
+	err = decoder.Decode(&cs.CommitmentInfo)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+
+	err = decoder.Decode(&cs.GkrInfo)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+
+	t11 := time.Now()
+	fmt.Printf("Decoding CommitmentInfo/GkrInfo took: %0.2fs\n", t11.Sub(t10).Seconds())
+	fmt.Printf("Decoding total took: %0.2fs\n", t11.Sub(t0).Seconds())
 
 	if err := cs.CheckSerializationHeader(); err != nil {
 		return int64(decoder.NumBytesRead()), err
