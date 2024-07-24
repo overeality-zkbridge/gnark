@@ -154,6 +154,9 @@ func (cs *system) WriteTo(w io.Writer) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
+	encodeCallDataToWriter(w, cs.CallData)
+
 	encoder := enc.NewEncoder(&_w)
 
 	// encode our object
@@ -177,7 +180,7 @@ func (cs *system) WriteTo(w io.Writer) (int64, error) {
 	t1 := time.Now()
 	fmt.Printf("Encoding Type took: %0.2fs\n", t1.Sub(t0).Seconds())
 
-	fmt.Printf("len(Instructions) =  %v\n", len(cs.Instructions))
+	fmt.Printf("len(Instructions) = %v\n", len(cs.Instructions))
 	err = encoder.Encode(cs.Instructions)
 	if err != nil {
 		return _w.N, err
@@ -185,21 +188,37 @@ func (cs *system) WriteTo(w io.Writer) (int64, error) {
 	t2 := time.Now()
 	fmt.Printf("Encoding Instructions took: %0.2fs\n", t2.Sub(t1).Seconds())
 
-	fmt.Printf("len(Blueprints) =  %v\n", len(cs.Blueprints))
+	fmt.Printf("len(Blueprints) = %v\n", len(cs.Blueprints))
 	err = encoder.Encode(cs.Blueprints)
 	if err != nil {
 		return _w.N, err
 	}
 	t3 := time.Now()
-	fmt.Printf("Encoding Instructions took: %0.2fs\n", t3.Sub(t2).Seconds())
+	fmt.Printf("Encoding Blueprints took: %0.2fs\n", t3.Sub(t2).Seconds())
 
-	fmt.Printf("len(CallData) =  %v\n", len(cs.CallData))
-	err = encoder.Encode(cs.CallData)
-	if err != nil {
-		return _w.N, err
-	}
+	//const maxArrayElements = 2147483647
+	//for i := 0; i < 10; i++ {
+	//	offset := i * maxArrayElements
+	//	if offset >= len(cs.CallData) {
+	//		err = encoder.Encode([]uint32{})
+	//		if err != nil {
+	//			return _w.N, err
+	//		}
+	//		continue
+	//	}
+	//	size := maxArrayElements
+	//	if offset+size > len(cs.CallData) {
+	//		size = len(cs.CallData) - offset
+	//	}
+	//	subData := cs.CallData[offset : offset+size]
+	//	err = encoder.Encode(subData)
+	//	if err != nil {
+	//		return _w.N, err
+	//	}
+	//}
+
 	t4 := time.Now()
-	fmt.Printf("Encoding Instructions took: %0.2fs\n", t4.Sub(t3).Seconds())
+	//fmt.Printf("Encoding CallData took: %0.2fs\n", t4.Sub(t3).Seconds())
 
 	err = encoder.Encode(cs.NbConstraints)
 	if err != nil {
@@ -301,6 +320,12 @@ func (cs *system) ReadFrom(r io.Reader) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
+	cs.CallData, err = decodeCallDataFromReader(r)
+	if err != nil {
+		return int64(0), err
+	}
+
 	decoder := dm.NewDecoder(r)
 
 	// initialize coeff table
@@ -337,12 +362,12 @@ func (cs *system) ReadFrom(r io.Reader) (int64, error) {
 	t2 := time.Now()
 	fmt.Printf("Decoding Blueprints took: %0.2fs\n", t2.Sub(t1).Seconds())
 
-	err = decoder.Decode(&cs.CallData)
-	if err != nil {
-		return int64(decoder.NumBytesRead()), err
-	}
+	//err = decoder.Decode(&cs.CallData)
+	//if err != nil {
+	//	return int64(decoder.NumBytesRead()), err
+	//}
 	t3 := time.Now()
-	fmt.Printf("Decoding CallData took: %0.2fs\n", t3.Sub(t2).Seconds())
+	//fmt.Printf("Decoding CallData took: %0.2fs\n", t3.Sub(t2).Seconds())
 
 	err = decoder.Decode(&cs.NbConstraints)
 	if err != nil {
