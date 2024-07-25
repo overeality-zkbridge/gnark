@@ -196,27 +196,6 @@ func (cs *system) WriteTo(w io.Writer) (int64, error) {
 	t3 := time.Now()
 	fmt.Printf("Encoding Blueprints took: %0.2fs\n", t3.Sub(t2).Seconds())
 
-	//const maxArrayElements = 2147483647
-	//for i := 0; i < 10; i++ {
-	//	offset := i * maxArrayElements
-	//	if offset >= len(cs.CallData) {
-	//		err = encoder.Encode([]uint32{})
-	//		if err != nil {
-	//			return _w.N, err
-	//		}
-	//		continue
-	//	}
-	//	size := maxArrayElements
-	//	if offset+size > len(cs.CallData) {
-	//		size = len(cs.CallData) - offset
-	//	}
-	//	subData := cs.CallData[offset : offset+size]
-	//	err = encoder.Encode(subData)
-	//	if err != nil {
-	//		return _w.N, err
-	//	}
-	//}
-
 	t4 := time.Now()
 	//fmt.Printf("Encoding CallData took: %0.2fs\n", t4.Sub(t3).Seconds())
 
@@ -300,6 +279,13 @@ func (cs *system) WriteTo(w io.Writer) (int64, error) {
 	}
 	t14 := time.Now()
 	fmt.Printf("Encoding GkrInfo took: %0.2fs\n", t14.Sub(t13).Seconds())
+
+	err = encoder.Encode(cs.Coefficients)
+	if err != nil {
+		return _w.N, err
+	}
+	t15 := time.Now()
+	fmt.Printf("Encoding Coefficients took: %0.2fs\n", t15.Sub(t14).Seconds())
 
 	fmt.Printf("Total took: %v\n", t14.Sub(t0))
 
@@ -440,8 +426,13 @@ func (cs *system) ReadFrom(r io.Reader) (int64, error) {
 		return int64(decoder.NumBytesRead()), err
 	}
 
+	err = decoder.Decode(&cs.Coefficients)
+	if err != nil {
+		return int64(decoder.NumBytesRead()), err
+	}
+
 	t11 := time.Now()
-	fmt.Printf("Decoding CommitmentInfo/GkrInfo took: %0.2fs\n", t11.Sub(t10).Seconds())
+	fmt.Printf("Decoding CommitmentInfo/GkrInfo/Coefficients took: %0.2fs\n", t11.Sub(t10).Seconds())
 	fmt.Printf("Decoding total took: %0.2fs\n", t11.Sub(t0).Seconds())
 
 	if err := cs.CheckSerializationHeader(); err != nil {
