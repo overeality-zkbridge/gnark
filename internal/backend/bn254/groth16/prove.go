@@ -15,9 +15,6 @@
 package groth16
 
 import (
-	"os"
-	"runtime/pprof"
-
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 
 	curve "github.com/consensys/gnark-crypto/ecc/bn254"
@@ -84,18 +81,18 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, witness bn254witness.Witness, opt back
 		}
 	}
 
-	f, err := os.Create("memprofile2.out")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not create memory profile: %v\n", err)
-		os.Exit(1)
-	}
-
-	defer f.Close()
+	//f, err := os.Create("memprofile2.out")
+	//if err != nil {
+	//	fmt.Fprintf(os.Stderr, "could not create memory profile: %v\n", err)
+	//	os.Exit(1)
+	//}
+	//
+	//defer f.Close()
 	// Write the memory profile to the file
-	if err := pprof.WriteHeapProfile(f); err != nil {
-		fmt.Fprintf(os.Stderr, "could not write memory profile: %v\n", err)
-		os.Exit(1)
-	}
+	//if err := pprof.WriteHeapProfile(f); err != nil {
+	//	fmt.Fprintf(os.Stderr, "could not write memory profile: %v\n", err)
+	//	os.Exit(1)
+	//}
 	start := time.Now()
 
 	// set the wire values in regular form
@@ -144,18 +141,18 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, witness bn254witness.Witness, opt back
 		}
 		close(chWireValuesB)
 	}()
-	f3, err := os.Create("memprofile3.out")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not create memory profile: %v\n", err)
-		os.Exit(1)
-	}
-
-	defer f3.Close()
+	//f3, err := os.Create("memprofile3.out")
+	//if err != nil {
+	//	fmt.Fprintf(os.Stderr, "could not create memory profile: %v\n", err)
+	//	os.Exit(1)
+	//}
+	//
+	//defer f3.Close()
 	// Write the memory profile to the file
-	if err := pprof.WriteHeapProfile(f3); err != nil {
-		fmt.Fprintf(os.Stderr, "could not write memory profile: %v\n", err)
-		os.Exit(1)
-	}
+	//if err := pprof.WriteHeapProfile(f3); err != nil {
+	//	fmt.Fprintf(os.Stderr, "could not write memory profile: %v\n", err)
+	//	os.Exit(1)
+	//}
 
 	// sample random r and s
 	var r, s big.Int
@@ -213,20 +210,20 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, witness bn254witness.Witness, opt back
 	computeKRS := func() {
 		// we could NOT split the Krs multiExp in 2, and just append pk.G1.K and pk.G1.Z
 		// however, having similar lengths for our tasks helps with parallelism
-		fmt.Println("wtf0")
+		//fmt.Println("wtf0")
 		var krs, krs2, p1 curve.G1Jac
 		chKrs2Done := make(chan error, 1)
 		go func() {
 			_, err := krs2.MultiExp(pk.G1.Z, h, ecc.MultiExpConfig{NbTasks: n / 2})
 			chKrs2Done <- err
 		}()
-		fmt.Println("wtf1")
+		//fmt.Println("wtf1")
 		if _, err := krs.MultiExp(pk.G1.K, wireValues[r1cs.NbPublicVariables:], ecc.MultiExpConfig{NbTasks: n / 2}); err != nil {
 			chKrsDone <- err
-			fmt.Println("wtf3")
+			//fmt.Println("wtf3")
 			return
 		}
-		fmt.Println("wtf2")
+		//fmt.Println("wtf2")
 		krs.AddMixed(&deltas[2])
 		n := 3
 		for n != 0 {
@@ -254,11 +251,11 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, witness bn254witness.Witness, opt back
 			}
 			n--
 		}
-		fmt.Println("wtf4")
+		//fmt.Println("wtf4")
 
 		proof.Krs.FromJacobian(&krs)
 		chKrsDone <- nil
-		fmt.Println("wtf5")
+		//fmt.Println("wtf5")
 	}
 
 	computeBS2 := func() error {
@@ -288,24 +285,24 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, witness bn254witness.Witness, opt back
 	//<-chHDone
 
 	// schedule our proof part computations
-	fmt.Println("computeAR1")
+	//fmt.Println("computeAR1")
 	computeAR1()
-	fmt.Println("computeBS1")
+	//fmt.Println("computeBS1")
 	computeBS1()
-	fmt.Println("computeKRS")
+	//fmt.Println("computeKRS")
 	computeKRS()
-	f4, err := os.Create("memprofile4.out")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not create memory profile: %v\n", err)
-		os.Exit(1)
-	}
-
-	defer f4.Close()
-	// Write the memory profile to the file
-	if err := pprof.WriteHeapProfile(f4); err != nil {
-		fmt.Fprintf(os.Stderr, "could not write memory profile: %v\n", err)
-		os.Exit(1)
-	}
+	//f4, err := os.Create("memprofile4.out")
+	//if err != nil {
+	//	fmt.Fprintf(os.Stderr, "could not create memory profile: %v\n", err)
+	//	os.Exit(1)
+	//}
+	//
+	//defer f4.Close()
+	//// Write the memory profile to the file
+	//if err := pprof.WriteHeapProfile(f4); err != nil {
+	//	fmt.Fprintf(os.Stderr, "could not write memory profile: %v\n", err)
+	//	os.Exit(1)
+	//}
 	if err := computeBS2(); err != nil {
 		return nil, err
 	}
